@@ -6,7 +6,7 @@ import torch
 # The below are classes in which each tensor will be represented
 
 class TensorTable: 
-    def __init__(self, tensor, attributes, dim=None):
+    def __init__(self,name: str, tensor: torch.Tensor, attributes: tuple[str], dim=None):
         """Tensor Table is representation of Relational table in form of tensors
         it only contains table name and attributes. Each table attribute points 
         to the column tensor
@@ -24,19 +24,19 @@ class TensorTable:
 
 
 class NumTensor:
-    def __init__(self, tensor):
+    def __init__(self,column_name: str, tensor: torch.Tensor):
         """Number Tensor is the tensor representation of a numerical column of 
         Relational database. Ex: age, size, etc. columns
         The NumTensor has to be of size (n, 1)
         """
         n = len(tensor)
-        self.tensor = None
+        self.tensor = tensor
         self.dim = (n,1)
         if tensor.shape != self.dim:
             raise TypeError # need to change errors
 
 class StrTensor:
-    def __init__(self, tensor:torch.Tensor):
+    def __init__(self, column_name: str, tensor:torch.Tensor):
         """String Tensor is the representation of a categorical column of 
         Relational database. Ex: name, id, etc columns.
         The size of String Tensor has to be of (n, m) where n is number of column
@@ -61,7 +61,7 @@ class ScalerTensor:
         self.dim = (1,)
 
 class DateTensor:
-    def __init__(self, tensor, format="DD-MM-YYYY"):
+    def __init__(self, column_name: str, tensor, format="DD-MM-YYYY"):
         """Date Tensor are representation of Date column in Relational database
         This is stored in a unique format. 
         
@@ -69,5 +69,5 @@ class DateTensor:
         the dimension of the tensor is (n, 3) where represents the date
         """
         n = len(tensor)
-        self.tensor = None 
+        self.tensor = tensor
         self.dim = (n, 3)
