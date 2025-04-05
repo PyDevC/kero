@@ -14,7 +14,7 @@ def generate_pgquery(table:str, column_names:list[str])->str:
     """generates a pgquery from column names and table name
     """
     column_names_str = ", ".join(column_names)
-    query = f"SELECT {column_names_str} FROM {table}"
+    query = f"SELECT{column_names_str}FROM{table}"
     return query
 
 def generate_kquery(query:str)->str:
@@ -27,13 +27,17 @@ def get_table_name(query):
         match = r"(?<=FROM)(.*)(?=WHERE)"
     else:
         match = r"(?<=FROM)(.*)(?=WHERE|$)"
-    table_name = re.match(match, query)
-    table_name = table_name.group(0)
-    return table_name
+    table_name = re.search(match, query)
+    if table_name:
+        table_name = table_name.group(0)
+        return table_name
+    return None
 
-def get_column_names(query:str)->list[str]:
+def get_column_names(query:str):
     match = r"(?<=SELECT)(.*)(?=FROM)"
     query = re.search(match, query)
-    columns = query.group(0)
-    columns = columns.split()
-    return columns
+    if query:
+        columns = query.group(0)
+        columns = columns.split(', ')
+        return columns
+    return None

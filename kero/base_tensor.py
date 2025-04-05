@@ -5,7 +5,7 @@ import torch
 
 # The below are classes in which each tensor will be represented
 
-class TensorTable: 
+class TableTensor: 
     def __init__(self,name: str, tensor: torch.Tensor, attributes: tuple[str], dim=None):
         """Tensor Table is representation of Relational table in form of tensors
         it only contains table name and attributes. Each table attribute points 
