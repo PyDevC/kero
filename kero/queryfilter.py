@@ -33,11 +33,11 @@ def get_table_name(query):
         return table_name
     return None
 
-def get_column_names(query:str):
+def get_column_names(query:str)->list[str]:
     match = r"(?<=SELECT)(.*)(?=FROM)"
     query = re.search(match, query)
     if query:
         columns = query.group(0)
-        columns = columns.split(', ')
+        columns = [ col.strip() for col in columns.split(', ') ]
         return columns
-    return None
+    return []
