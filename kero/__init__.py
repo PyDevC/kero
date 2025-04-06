@@ -1,15 +1,18 @@
 from .tensors import (
-    TableTensor,
-    ScalerTensor,
+    DateTensor,
     NumTensor,
+    ScalerTensor,
     StrTensor,
-    DateTensor
+    TableTensor
 )
 
 __all__ = [
-    "TableTensor",
-    "ScalerTensor",
+    "DateTensor",
     "NumTensor",
+    "ScalerTensor",
     "StrTensor",
-    "DateTensor"
+    "TableTensor"
 ]
+
+# Please keep this list sorted
+assert __all__ == sorted(__all__)
