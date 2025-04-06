@@ -1,4 +1,4 @@
-from .base_tensor import (
+from .tensors import (
     TableTensor,
     ScalerTensor,
     NumTensor,
