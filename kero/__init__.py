@@ -6,7 +6,7 @@ from .tensors import (
     TableTensor
 )
 
-import engine
+import kero.engine as engine
 from .queryfilter import QueryFilter
 
 __all__ = [

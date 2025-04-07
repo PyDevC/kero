@@ -2,4 +2,4 @@
 
 A GPU accelerated Database system
 
-We use a similar approach to Tensor Query Computation that uses Tensor Computation Runtimes.
+We use a similar approach to Tensor Query Processor that uses Tensor Computation Runtimes.
