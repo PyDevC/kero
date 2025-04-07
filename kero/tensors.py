@@ -1,5 +1,6 @@
 import torch
-from typing import Dict, List, Union
+
+from typing import Dict, List
 
 class BaseTensor:
 

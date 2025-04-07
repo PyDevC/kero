@@ -6,12 +6,17 @@ from .tensors import (
     TableTensor
 )
 
+import engine
+from .queryfilter import QueryFilter
+
 __all__ = [
     "DateTensor",
     "NumTensor",
+    "QueryFilter",
     "ScalerTensor",
     "StrTensor",
-    "TableTensor"
+    "TableTensor",
+    "engine",
 ]
 
 # Please keep this list sorted
