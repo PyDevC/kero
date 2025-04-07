@@ -1,6 +1,6 @@
 import torch
 
-from typing import Dict, List
+from typing import Dict, List, Union
 
 class BaseTensor:
 
@@ -72,7 +72,11 @@ class DateTensor(BaseTensor):
 
 class TableTensor: 
 
-    def __init__(self, columns: Dict[str, BaseTensor], name: str):
+    def __init__(
+        self, 
+        columns: Dict[str, Union[BaseTensor, NumTensor, StrTensor, DateTensor]], 
+        name: str
+    ):
         """Tensor Table is representation of Relational table in form of tensors
         it only contains table name and attributes. Each table attribute points 
         to the column tensor

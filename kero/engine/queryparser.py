@@ -1,4 +1,5 @@
 import sqlparse
+from typing import Dict, List
 
 class Parser:
     """

@@ -1,9 +1,8 @@
 import torch
 from typing import Dict, Any
 from kero.tensors import TableTensor
-from kero.compiler import KeroCompiler
-from kero.queryparser import KeroQueryParser
-
+from .queryparser import Parser
+from .compiler import KeroCompiler
 
 class Executor:
     """
@@ -19,8 +18,8 @@ class Executor:
             table (TableTensor): The tensor-based representation of a relational table.
         """
         self.table = table
-        self.parser = KeroQueryParser()
         self.compiler = KeroCompiler(table)
+        self.parser = Parser()
 
     def execute_query(self, query: str) -> torch.Tensor:
         """

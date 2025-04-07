@@ -1,6 +1,7 @@
 import torch
 from typing import Dict, List, Union
 from kero.tensors import TableTensor, NumTensor, StrTensor, DateTensor
+from kero.engine.operations.operators import lt, eq, gt
 
 class KeroCompiler:
     """
@@ -49,30 +50,20 @@ class KeroCompiler:
         """
         operator = condition['operator']
 
-        if operator == 'AND':
-            left_mask = self._process_where(condition['left'])
-            right_mask = self._process_where(condition['right'])
-            return LogicalAndOp(left_mask, right_mask).execute()
-
-        elif operator == 'OR':
-            left_mask = self._process_where(condition['left'])
-            right_mask = self._process_where(condition['right'])
-            return LogicalOrOp(left_mask, right_mask).execute()
-
-        elif operator == '=':
+        if operator == '=':
             left_tensor = self._get_operand(condition['left'])
             right_tensor = self._get_operand(condition['right'])
-            return EqualOp(left_tensor, right_tensor).execute()
+            return eq(left_tensor, right_tensor).execute()
 
         elif operator == '>':
             left_tensor = self._get_operand(condition['left'])
             right_tensor = self._get_operand(condition['right'])
-            return GreaterThanOp(left_tensor, right_tensor).execute()
+            return gt(left_tensor, right_tensor).execute()
 
         elif operator == '<':
             left_tensor = self._get_operand(condition['left'])
             right_tensor = self._get_operand(condition['right'])
-            return LessThanOp(left_tensor, right_tensor).execute()
+            return lt(left_tensor, right_tensor).execute()
 
         raise ValueError(f"Unsupported operator: {operator}")
 
