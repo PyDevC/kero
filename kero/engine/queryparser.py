@@ -1,36 +1,62 @@
-import sqlparse
-from typing import Dict, List
+import sqlglot
+import sqlglot.expressions as exp
 
 class Parser:
-    """
-    A parser that converts SQL-like queries into intermediate representations (kquery).
-    """
+    def parse(self, query: str) -> dict:
+        self.query = query
+        kquery = self._generate_kquery()
+        return kquery
 
-    def parse(self, query: str) -> Dict:
-        """
-        Parse an SQL-like query into an intermediate representation.
-
-        Args:
-            query (str): SQL-like query string.
-
-        Returns:
-            Dict: Intermediate representation (kquery).
-        """
-        parsed_query = sqlparse.parse(query)[0]
-        
-        # Extract SELECT clause
-        columns = self._extract_columns(parsed_query)
-
-        # Extract FROM clause (table name is ignored here as we work with TableTensor)
-        
-        # Extract WHERE clause
-        where_clause = self._extract_where(parsed_query)
-
-        return {
-            "columns": columns,
-            "where": where_clause,
+    def _generate_kquery(self) -> dict:
+        parsed = sqlglot.parse_one(self.query)
+        query_dict = {
+            'Table': None,
+            'operations': [],
+            'op_pattern': []
         }
 
-    def _extract_columns(self, parsed_query) -> List[str]:
-        """Extract column names from the SELECT clause."""
-        select_token = next(token for token in parsed_query.tokens if token.ttype is sqlparse.tokens.DML and token.value.upper() == "SELECT")
+        # Extract table name
+        for node in parsed.find_all(exp.Table):
+            query_dict['Table'] = node.name
+
+        # Extract WHERE conditions
+        where_clause = parsed.find(exp.Where)
+        if where_clause:
+            self._extract_conditions(where_clause.this, query_dict)
+
+        return query_dict
+
+    def _extract_conditions(self, condition, query_dict):
+        """Recursively extract conditions from WHERE clause"""
+        if isinstance(condition, exp.And) or isinstance(condition, exp.Or):
+            self._extract_conditions(condition.left, query_dict)
+            self._extract_conditions(condition.right, query_dict)
+        elif isinstance(condition, exp.Binary):
+            operator = self._get_operator_symbol(condition)
+            left = condition.left.name if isinstance(condition.left, exp.Column) else condition.left.this
+            right = condition.right.this if isinstance(condition.right, exp.Literal) else condition.right.name
+            
+            query_dict["operations"].append({
+                "operator": operator,
+                "left": left,
+                "right": right
+            })
+            query_dict["op_pattern"].append((left, right, operator))
+
+    def _get_operator_symbol(self, condition):
+        """Map condition types to operator symbols"""
+        if isinstance(condition, exp.EQ):
+            return '='
+        elif isinstance(condition, exp.NEQ):
+            return '!='
+        elif isinstance(condition, exp.GT):
+            return '>'
+        elif isinstance(condition, exp.GTE):
+            return '>='
+        elif isinstance(condition, exp.LT):
+            return '<'
+        elif isinstance(condition, exp.LTE):
+            return '<='
+        elif isinstance(condition, exp.Like):
+            return 'LIKE'
+        return 'UNKNOWN'
