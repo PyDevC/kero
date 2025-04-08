@@ -72,17 +72,28 @@ class KeroCompiler:
         Returns:
             torch.Tensor: Resulting tensor after applying the operation.
         """
+        if not isinstance(right, torch.Tensor):
+            right = torch.tensor(right)
+        if not isinstance(left, torch.Tensor):
+            right = torch.tensor(left)
+
         if operator == "=":
-            return eq(left, right).execute()
+            mask = eq(left, right).execute()
+            return torch.masked_select(left, mask)
         elif operator == "!=":
-            return ne(left, right).execute()
+            mask = ne(left, right).execute()
+            return torch.masked_select(left, mask)
         elif operator == ">":
-            return gt(left, right).execute()
+            mask = gt(left, right).execute()
+            return torch.masked_select(left, mask)
         elif operator == "<":
-            return lt(left, right).execute()
+            mask = lt(left, right).execute()
+            return torch.masked_select(left, mask)
         elif operator == ">=":
-            return ge(left, right).execute()
+            mask = ge(left, right).execute()
+            return torch.masked_select(left, mask)
         elif operator == "<=":
-            return le(left, right).execute()
+            mask = le(left, right).execute()
+            return torch.masked_select(left, mask)
         
         raise ValueError(f"Unsupported operator: {operator}")

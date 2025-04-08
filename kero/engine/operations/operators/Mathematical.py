@@ -3,14 +3,14 @@ from abc import ABC
 from .base import operator
 
 class bi_mat_op(ABC, operator):
-    def __init__(self, optype, tensor1, tensor2):
-        super().__init__(optype)
+    def __init__(self, tensor1, tensor2):
+        super().__init__()
         self.operand1 = tensor1
         self.operand2 = tensor2
 
 class u_math_op(ABC, operator):
-    def __init__(self, optype: str, tensor: torch.Tensor):
-        super().__init__(optype)
+    def __init__(self, tensor: torch.Tensor):
+        super().__init__()
         self.operand = tensor
 
 class add(bi_mat_op):

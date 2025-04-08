@@ -3,8 +3,8 @@ from abc import ABC
 from .base import operator
 
 class agg_op(ABC, operator):
-    def __init__(self, optype, tensor):
-        super().__init__(optype)
+    def __init__(self, tensor):
+        super().__init__()
         self.operand = tensor
 
 

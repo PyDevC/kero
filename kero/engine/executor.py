@@ -55,4 +55,3 @@ class Executor:
         # For simplicity, let's assume columns are directly indexable
         column_indices = [list(self.data.columns.keys()).index(col) for col in columns]
         return result[:, column_indices]
-
