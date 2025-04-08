@@ -1,84 +1,88 @@
 import torch
 from typing import Dict, List, Union
-from kero.tensors import TableTensor, NumTensor, StrTensor, DateTensor
-from kero.engine.operations.operators import lt, eq, gt
+from kero import TableTensor
+from kero.engine.operations.operators import eq, gt, lt, ge, le, ne, add, sub, prod, div
 
 class KeroCompiler:
     """
-    A compiler that transforms intermediate relational query representations (kquery)
-    into tensor operations and executes them on a TableTensor.
+    A compiler that processes individual operations from Intermediate Representation (IR)
+    and applies them to TableTensor data.
     """
+
     def __init__(self, table: TableTensor):
+        """
+        Initialize the compiler with a TableTensor.
+
+        Args:
+            table (TableTensor): The tensor-based representation of a relational table.
+        """
         self.table = table
 
-    def compile(self, kquery: Dict) -> torch.Tensor:
+    def compile(self, operations: List[Dict[str, Union[str, int]]]) -> torch.Tensor:
         """
-        Compile and execute the kquery on the given TableTensor.
+        Compile and execute a series of operations on the TableTensor.
 
         Args:
-            kquery (Dict): Intermediate representation of the query.
+            operations (List[Dict[str, Union[str, int]]]): List of operations from IR.
 
         Returns:
-            torch.Tensor: Resulting tensor after executing the query.
+            torch.Tensor: Resulting tensor after executing all operations.
         """
-        # Step 1: Process WHERE clause for filtering
-        mask = self._process_where(kquery.get('where')) if 'where' in kquery else None
+        result_tensor = None
 
-        # Step 2: Select columns based on SELECT clause
-        selected_columns = kquery.get('columns', list(self.table.columns.keys()))
-        tensors = []
+        for operation in operations:
+            operator = operation["operator"]
+            left_operand = self._get_tensor(operation["left"])
+            right_operand = self._get_tensor(operation["right"])
 
-        for col_name in selected_columns:
-            tensor = self.table.columns[col_name].tensor
-            if mask is not None:
-                tensor = tensor[mask]
-            tensors.append(tensor)
+            # Execute based on operator type
+            result_tensor = self._execute_operation(operator, left_operand, right_operand)
 
-        # Step 3: Stack tensors to form the final result
-        result = torch.stack(tensors, dim=1) if tensors else torch.tensor([])
-        return result
+        return result_tensor
 
-    def _process_where(self, condition: Dict) -> torch.BoolTensor:
-        """
-        Recursively process the WHERE clause to generate a boolean mask.
-
-        Args:
-            condition (Dict): Condition dictionary representing the WHERE clause.
-
-        Returns:
-            torch.BoolTensor: Boolean mask for filtering rows.
-        """
-        operator = condition['operator']
-
-        if operator == '=':
-            left_tensor = self._get_operand(condition['left'])
-            right_tensor = self._get_operand(condition['right'])
-            return eq(left_tensor, right_tensor).execute()
-
-        elif operator == '>':
-            left_tensor = self._get_operand(condition['left'])
-            right_tensor = self._get_operand(condition['right'])
-            return gt(left_tensor, right_tensor).execute()
-
-        elif operator == '<':
-            left_tensor = self._get_operand(condition['left'])
-            right_tensor = self._get_operand(condition['right'])
-            return lt(left_tensor, right_tensor).execute()
-
-        raise ValueError(f"Unsupported operator: {operator}")
-
-    def _get_operand(self, operand: Union[str, int, float]) -> torch.Tensor:
+    def _get_tensor(self, operand: Union[str, int]) -> torch.Tensor:
         """
         Resolve an operand to its corresponding tensor.
 
         Args:
-            operand (Union[str, int, float]): Operand value or column name.
+            operand (Union[str, int]): Operand value or column name.
 
         Returns:
             torch.Tensor: Corresponding tensor.
         """
+        try:
+            operand = int(operand)
+        except:
+            pass
         if isinstance(operand, str):
             # Operand is a column name
             return self.table.columns[operand].tensor
         # Operand is a constant value
-        return torch.tensor(operand)
+        return torch.tensor([operand])
+
+    def _execute_operation(self, operator: str, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+        """
+        Execute an operation based on its operator type.
+
+        Args:
+            operator (str): Operator type (e.g., '=', '>', '<').
+            left (torch.Tensor): Left operand tensor.
+            right (torch.Tensor): Right operand tensor.
+
+        Returns:
+            torch.Tensor: Resulting tensor after applying the operation.
+        """
+        if operator == "=":
+            return eq(left, right).execute()
+        elif operator == "!=":
+            return ne(left, right).execute()
+        elif operator == ">":
+            return gt(left, right).execute()
+        elif operator == "<":
+            return lt(left, right).execute()
+        elif operator == ">=":
+            return ge(left, right).execute()
+        elif operator == "<=":
+            return le(left, right).execute()
+        
+        raise ValueError(f"Unsupported operator: {operator}")
