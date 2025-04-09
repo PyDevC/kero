@@ -38,9 +38,18 @@ class StrTensor(BaseTensor):
     """
 
     def __init__(self, data: List[str], name: str):
-        self.vocab = {word: idx for idx, word in enumerate(set(data))}
-        tensor = torch.tensor([self.vocab[word] for word in data], dtype=torch.long)
+        self.data = [[ord(data[i][j]) for j in range(len(data[i]))] for i in range(len(data))]
+        self._transform_data()
+        tensor = torch.tensor(self.data, dtype=torch.uint8)
         super().__init__(tensor, name)
+
+    def _transform_data(self):
+        lengths = [len(length) for length in self.data]
+        max_length = max(lengths)
+        for i in range(len(self.data)):
+            while len(self.data[i]) < max_length:
+                self.data[i].append(0) 
+        
 
 
 class ScalerTensor:
