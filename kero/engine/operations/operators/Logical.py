@@ -15,12 +15,12 @@ class logical_op(ABC, operator):
 
 class eq(logical_op):
     def execute(self):
-        return torch.equal(self.operand1, self.operand2)
+        return (self.operand1 == self.operand2).bool()
 
 
 class ne(logical_op):
     def execute(self):
-        return torch.not_equal(self.operand1, self.operand2)
+        return (self.operand1 != self.operand2).bool()
 
 
 class gt(logical_op):

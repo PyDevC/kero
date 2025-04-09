@@ -24,6 +24,10 @@ class NumTensor(BaseTensor):
 
     def _validate_tensor(self):
         super()._validate_tensor()
+        if self.tensor.ndim != 1:
+            raise ValueError (
+                f"Tensor expected of size (n,), but received of size {self.tensor.size()}"
+            )
 
 
 class StrTensor(BaseTensor):
@@ -104,14 +108,24 @@ class TableTensor:
             return 
 
         first_col = next(iter(self.columns.values()))
-        num_rows = len(first_col.tensor)
+        if not isinstance(first_col, torch.Tensor):
+            num_rows = len(first_col.tensor)
+        else:
+            num_rows = len(first_col)
 
         for name, tensor in self.columns.items():
-            if len(tensor.tensor) != num_rows:
-                raise ValueError(
-                    f"Column {name} has {len(tensor.tensor)} rows, "
-                     "expected {num_rows}"
-                )
+            if not isinstance(first_col, torch.Tensor):
+                if len(tensor.tensor) != num_rows:
+                    raise ValueError(
+                        f"Column {name} has {len(tensor.tensor)} rows, "
+                            "expected {num_rows}"
+                    )
+            else:
+                if len(tensor) != num_rows:
+                    raise ValueError(
+                        f"Column {name} has {len(tensor.tensor)} rows, "
+                            "expected {num_rows}"
+                    )
 
     def to(self, device: str):
         # do not run

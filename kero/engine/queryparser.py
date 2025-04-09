@@ -10,6 +10,7 @@ class Parser:
     def _generate_kquery(self) -> dict:
         parsed = sqlglot.parse_one(self.query)
         query_dict = {
+            'columns': [],
             'Table': None,
             'operations': [],
             'op_pattern': []
@@ -24,7 +25,17 @@ class Parser:
         if where_clause:
             self._extract_conditions(where_clause.this, query_dict)
 
+        self._extract_columns(parsed, query_dict['columns'])
+
         return query_dict
+
+
+    def _extract_columns(self, parsed, columns):
+        for expression in sqlglot.parse_one(self.query).find(exp.Select).args["expressions"]:
+            if isinstance(expression, exp.Alias):
+                columns.append(expression.text("alias"))
+            elif isinstance(expression, exp.Column):
+                columns.append(expression.text("this"))
 
     def _extract_conditions(self, condition, query_dict):
         """Recursively extract conditions from WHERE clause"""
