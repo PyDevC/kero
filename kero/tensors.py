@@ -117,14 +117,12 @@ class TableTensor:
             if not isinstance(first_col, torch.Tensor):
                 if len(tensor.tensor) != num_rows:
                     raise ValueError(
-                        f"Column {name} has {len(tensor.tensor)} rows, "
-                            "expected {num_rows}"
+                        f"Column {name} has {len(tensor.tensor)} rows, expected {num_rows}"
                     )
             else:
                 if len(tensor) != num_rows:
                     raise ValueError(
-                        f"Column {name} has {len(tensor.tensor)} rows, "
-                            "expected {num_rows}"
+                        f"Column {name} has {len(tensor.tensor)} rows, expected {num_rows}"
                     )
 
     def to(self, device: str):
