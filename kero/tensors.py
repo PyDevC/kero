@@ -3,6 +3,7 @@ import torch
 from typing import Dict, List, Union
 
 class BaseTensor:
+    """Base class for all Tensor Columns"""
 
     def __init__(self, tensor: torch.Tensor, name: str):
         self.name = name
@@ -10,6 +11,9 @@ class BaseTensor:
         self._validate_tensor()
 
     def _validate_tensor(self):
+        """validate whether self.tensor is pytorch tensor or not
+        Need better type checking. To accept any tensor
+        """
         if not isinstance(self.tensor, torch.Tensor):
             raise TypeError (
                 f"Expected torch.Tensor, but got {type(self.tensor)} instead."
@@ -38,12 +42,22 @@ class StrTensor(BaseTensor):
     """
 
     def __init__(self, data: List[str], name: str):
+        """Need to be a list of string that converts to tensor.
+        Converts the strings to ascii number and then converts each name to a list
+        Length of largest string is the lenght of each inner list, if any string
+        has less characters than the last one then rest of the elements are 
+        filled with 0
+        StrTensor.tensor = [[123,123,123], [123,123,0]]
+        """
         self.data = [[ord(data[i][j]) for j in range(len(data[i]))] for i in range(len(data))]
         self._transform_data()
         tensor = torch.tensor(self.data, dtype=torch.uint8)
         super().__init__(tensor, name)
 
     def _transform_data(self):
+        """Converts the data into list of ascii numbers plus adding zero to rest
+        of the list length
+        """
         lengths = [len(length) for length in self.data]
         max_length = max(lengths)
         for i in range(len(self.data)):
@@ -80,7 +94,7 @@ class DateTensor(BaseTensor):
 
 
     def _date_to_ordinal(self, date):
-        return date
+        return date # need work here
 
 
 class TableTensor: 
@@ -109,10 +123,12 @@ class TableTensor:
 
 
     def _validate_dtype(self):
-        pass
+        pass # first we need to get dtypes form the columns Then validate the types
 
 
     def _validate_shape(self):
+        """Checks for all columns to have smae number of rows
+        """
         if not self.columns:
             return 
 
@@ -135,7 +151,10 @@ class TableTensor:
                     )
 
     def to(self, device: str):
-        # do not run
+        """Load all the columns to device
+        Args:
+            device: Any accelerator name
+        """
         return TableTensor(
             {name: tensor.tensor.to(device) for name, tensor in self.columns.items()},
             self.name

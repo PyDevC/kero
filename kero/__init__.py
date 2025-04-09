@@ -7,12 +7,10 @@ from .tensors import (
 )
 
 import kero.engine as engine
-from .queryfilter import QueryFilter
 
 __all__ = [
     "DateTensor",
     "NumTensor",
-    "QueryFilter",
     "ScalerTensor",
     "StrTensor",
     "TableTensor",

@@ -4,12 +4,21 @@ from kero.engine import KeroCompiler
 from typing import Dict, List, Any
 
 class Executor:
+    """Utilizes KeroCompiler to perform operations and get results from
+    Compiler, maps the results with respective columns selected in the query
+    """
     def __init__(self, data: TableTensor):
+        """Parameters:
+            data: TableTensor that assocates to a single compiler
+        """
         self.data = data
         self.compiler = KeroCompiler(data)
         self.result = None
 
     def execute(self, kquery: Dict[str, Any]) -> torch.Tensor:
+        """Gets the mask from the compiler operations
+        maps the output to the columns dict
+        """
         mask = self.compiler.compile(kquery['operations'])
         
         if 'columns' in kquery:

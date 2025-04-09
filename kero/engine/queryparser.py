@@ -2,12 +2,23 @@ import sqlglot
 import sqlglot.expressions as exp
 
 class Parser:
+    """Sql parser used for generating kquery from a simple sql query
+    """
     def parse(self, query: str) -> dict:
+        """get kquery
+        Parameters:
+            query: sql query
+        Returns: kquery (Contains the information about the query such as columns,
+        Table name, operations, conditions)
+        """
         self.query = query
         kquery = self._generate_kquery()
         return kquery
 
     def _generate_kquery(self) -> dict:
+        """Generate a kquery using sqlglot gathering Table expression,
+        SELECT expression, etc
+        """
         parsed = sqlglot.parse_one(self.query)
         query_dict = {
             'columns': [],
@@ -31,10 +42,11 @@ class Parser:
 
 
     def _extract_columns(self, parsed, columns):
+        """Extracts the columns from the query getting only actual name of a tensor
+        Ignoring the aliases
+        """
         for expression in sqlglot.parse_one(self.query).find(exp.Select).args["expressions"]:
-            if isinstance(expression, exp.Alias):
-                columns.append(expression.text("alias"))
-            elif isinstance(expression, exp.Column):
+            if isinstance(expression, exp.Column):
                 columns.append(expression.text("this"))
 
     def _extract_conditions(self, condition, query_dict):

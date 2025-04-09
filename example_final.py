@@ -22,7 +22,7 @@ table_tensor = TableTensor(columns=table_data, name="employees")
 table_tensor.to(device)
 
 query = """
-SELECT name, employee_id, age
+SELECT name as n, employee_id, age
 FROM employees 
 WHERE employee_id > 7; 
 """
