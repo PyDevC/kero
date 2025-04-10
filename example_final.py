@@ -4,8 +4,8 @@ from kero import TableTensor, NumTensor, StrTensor
 from kero.engine import Executor, Parser
 import numpy as np
 
-id = np.random.randint(1 ,10 , size=(10,)) # 10 million queries
-age = np.random.randint(18 ,100 , size=(10,)) # 10 million queries
+id = np.random.choice(np.arange(1000000, 1000000000), replace=False, size=(10000,))
+age = np.random.randint(18 ,100 , size=(10000,)) # 10 million queries
 names = ['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Frank', 'Grace', 'Hannah', 'Ivy', 'Jack']
 
 # This is how we call 10 million rows and get them queried
@@ -16,15 +16,15 @@ table_data = {
     "age": NumTensor(torch.from_numpy(age), name="age"),
     "int": NumTensor(torch.from_numpy(age), name="int"),
     "col": NumTensor(torch.from_numpy(age), name="col"),
-    "name": StrTensor(names, name="names")
+    #"name": StrTensor(names, name="names")
 }
 table_tensor = TableTensor(columns=table_data, name="employees")
 table_tensor.to(device)
 
 query = """
-SELECT name as n, employee_id, age
+SELECT employee_id, age
 FROM employees 
-WHERE employee_id > 7; 
+WHERE age > 28; 
 """
 
 parser = Parser()
