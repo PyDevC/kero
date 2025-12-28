@@ -2,4 +2,24 @@
 
 GPU Accelerated Tensor Database Management System (GATDBMS)
 
-> Refactoring in progress, things might break
+## Installation
+
+> Requires torch>=2.5.0
+
+Pip install from source
+
+```bash
+python3 -m build
+pip install dist/kero*.whl
+```
+
+## Build the docs
+
+All the docs building requirements are in `docs/` directory.
+
+```bash
+pip install -r requirements.txt
+make html
+```
+
+Basic example usage is mentioned in example.py
