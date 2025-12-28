@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kero"
+version = "v0.1.0"
+description = "GPU Accelerated DataBase Query Engine"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "PyDevC", email = "pydevc@proton.me" }
+]
+# Core dependencies
+dependencies = [
+    "numpy",
+    "pandas",
+    "sqlglot",
+    "sqlparse",
+    "torch>=2.5.0",
+]
+
+[project.optional-dependencies]
+cuda = ["torch>=2.5.0"]
+rocm = ["torch>=2.5.0"]
+
+[tool.setuptools]
+packages = { find = { where = ["."], include = ["kero*"] } }

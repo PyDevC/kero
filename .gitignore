@@ -1,2 +1,4 @@
 *__pycache__*/
 docs/build/*
+kero.egg-info/*
+dist/*
