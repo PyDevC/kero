@@ -23,3 +23,10 @@ make html
 ```
 
 Basic example usage is mentioned in example.py
+
+## Clean after build
+
+```bash
+rm -rf dist/
+rm -rf *.egg-info/
+```
