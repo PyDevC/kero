@@ -1,0 +1,1 @@
+nanobind_add_module(sql_to_mlir_conversion sql_to_mlir.cpp)
