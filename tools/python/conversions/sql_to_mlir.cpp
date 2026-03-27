@@ -1,7 +1,10 @@
 #include <nanobind/nanobind.h>
 
-int add(int a, int b) { return a + b; }
+nanobind::dict query_dict_to_mlir(nanobind::dict &query_dict){
+    nanobind::print(query_dict);
+    return query_dict;
+}
 
-NB_MODULE(my_ext, m) {
-    m.def("add", &add);
+NB_MODULE(sql_to_mlir, m){
+    m.def("query_dict_to_mlir", &query_dict_to_mlir);
 }
