@@ -8,3 +8,8 @@ dist/*
 ## MLIR ignores
 build/*
 .cache/*
+
+## Lit ignores
+test/*
+!test/*.mlir
+!test/*.py
