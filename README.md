@@ -1,32 +1,20 @@
 # Kero-Sine
 
-GPU Accelerated Tensor Database Management System (GATDBMS)
+Kero-Sine: GPU Accelerated SQL Query Engine
 
-## Installation
+KeroSine is MLIR-based SQL Compiler for Deep Learning Libraries such as PyTorch.
+It works as a DataLoader that converts the query results in tensors and optimizes whole process to deliver better experience when working with SQL related Deep Learning pipelines.
 
-> Requires torch>=2.5.0
+> Under Development
+> Dependencies, API, and docs will be updated at first pre-release 
 
-Pip install from source
+## How to build
 
-```bash
-python3 -m build
-pip install dist/kero*.whl
-```
+### MLIR dialect build
 
-## Build the docs
-
-All the docs building requirements are in `docs/` directory.
+Before working with this project make sure you have mlir build from source.
 
 ```bash
-pip install -r requirements.txt
-make html
-```
-
-Basic example usage is mentioned in example.py
-
-## Clean after build
-
-```bash
-rm -rf dist/
-rm -rf *.egg-info/
+export THIRDPARTY_LLVM_DIR"="/path/to/llvm-project"
+bash test/build.sh
 ```
