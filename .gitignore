@@ -1,15 +1,14 @@
 ## Python ignores
-*__pycache__*/
-docs/build/*
-kero.egg-info/*
-dist/*
+__pycache__/
+docs/build/
+*.egg-info/
+dist/
 
 
 ## MLIR ignores
-build/*
-.cache/*
+build/
+.cache/
 
 ## Lit ignores
-test/*
-!test/*.mlir
-!test/*.py
+test/**/Output/
+test/.lit_*

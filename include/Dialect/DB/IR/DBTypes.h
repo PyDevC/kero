@@ -4,7 +4,6 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
 
-
 #define GET_TYPEDEF_CLASSES
 #include "Dialect/DB/IR/DBDialectType.h.inc"
 
