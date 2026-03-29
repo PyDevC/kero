@@ -41,4 +41,12 @@ def DB_GetColumnOp : DB_Op<"getcol"> {
     let assemblyFormat = "$row `,` $column attr-dict `:` `(` type($row) `,` type($column) `)` `->` type($val)";
 }
 
+def DB_ProjectOp : DB_Op<"project"> {
+    let summary = "Project the perdicate from the scanned tables.";
+    let arguments = (ins DBResult:$filter);
+    let results = (outs DBResult:$result);
+
+    let assemblyFormat = "$filter attr-dict `:` type($filter) `->` type($result)";
+}
+
 #endif // DIALECT_DB_IR_DBOPS_TD_
