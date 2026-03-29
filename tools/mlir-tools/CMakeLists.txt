@@ -7,6 +7,7 @@ set(LIBS
     MLIRIR
 
     MLIRFuncDialect
+    MLIRArithDialect
 
     MLIROptLib
     MLIRPass
