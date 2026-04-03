@@ -23,8 +23,8 @@ void DBDialect::initialize() {
         >();
 
     addOperations<
-        #define GET_OP_LIST
-    #include "Dialect/DB/IR/DBOps.cpp.inc"
+#define GET_OP_LIST
+#include "Dialect/DB/IR/DBOps.cpp.inc"
         >();
 }
 
