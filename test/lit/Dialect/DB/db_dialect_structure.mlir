@@ -21,6 +21,7 @@ module {
 module {
     // CHECK-LABEL: @test_db_filter_op
     func.func @test_db_filter_op (%arg0: !db.table<"user">, %arg_age: !db.column<"user", "age", i32>) -> !db.result {
+        // CHECK-NEXT: %[[RESULT:.*]] = db.scan %arg0 : <"user">
         %scan0 = db.scan %arg0 : !db.table<"user"> -> !db.result
         %filtered = db.filter %scan0 {
             ^bb0(%row : !db.row):
@@ -38,4 +39,15 @@ module {
         %projected = db.project %filtered : !db.result -> !db.result
         return %projected : !db.result
     }
+}
+
+// CHECK: @query
+func.func @query (%arg0: !db.table<"PERSON">, %arg_age: !db.column<"PERSON", "age", i32>) -> !db.result {
+    %scan0 = db.scan %arg0 : !db.table<"PERSON"> -> !db.result
+    %filter = db.filter %scan0 {
+        ^bb0(%row : !db.row):
+            %no_limit = arith.constant 1 : i32
+            db.return %no_limit : i32
+    } : (!db.result) -> !db.result
+    return %filter : !db.result
 }
