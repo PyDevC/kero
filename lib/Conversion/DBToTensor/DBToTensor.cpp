@@ -2,7 +2,6 @@
 #include "Dialect/DB/IR/DBOps.h"
 #include "Dialect/DB/IR/DBTypes.h"
 
-#include "llvm/ADT/SmallVector.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
@@ -13,6 +12,8 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 
+#include "llvm/ADT/SmallVector.h"
+
 #define GEN_PASS_DEF_DBTOTENSOR
 #include "Conversion/DBToTensor/DBToTensor.h.inc"
 
@@ -22,28 +23,30 @@ namespace db {
 class DBToTensorTypeConverter : public TypeConverter {
     public:
     DBToTensorTypeConverter(MLIRContext* context) {
-        // Safety net for other types, type stays the same
         auto dynshape = mlir::ShapedType::kDynamic;
+
+        /// Keep the type same for anonymous type
         addConversion([](Type type) { return type; });
 
+        /// Convert ResultType to memref<?xf32>
         addConversion([dynshape, context](db::ResultType restype) {
             auto f32 = mlir::Float32Type::get(context);
-            // {-1, -1} is tensor<?x?xf32>
-            return mlir::RankedTensorType::get({dynshape, dynshape}, f32);
+            return mlir::MemRefType::get({dynshape}, f32);
         });
 
+        /// Convert TableType to memref<?x?xf32>
         addConversion([dynshape, context](db::TableType tbltype) {
             auto f32 = mlir::Float32Type::get(context);
-            // {-1, -1} is tensor<?x?xf32>
-            return mlir::RankedTensorType::get({dynshape, dynshape}, f32);
+            return mlir::MemRefType::get({dynshape, dynshape}, f32);
         });
 
+        /// Convert ColumnType to memref<1x?xf32>
         addConversion([dynshape, context](db::ColumnType coltype) {
             auto f32 = mlir::Float32Type::get(context);
-            // {1, -1} is tensor<1x?xf32>
-            return mlir::RankedTensorType::get({1, dynshape}, f32);
+            return mlir::MemRefType::get({1, dynshape}, f32);
         });
 
+        /// Convert RowType to IndexType
         addConversion([context](db::RowType rowtype) {
             return mlir::IndexType::get(context);
         });
