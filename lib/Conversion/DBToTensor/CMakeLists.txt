@@ -6,13 +6,14 @@ add_mlir_dialect_library(DBToTensorPass
     DBToTensorIncGen
 
     LINK_LIBS PUBLIC
-    MLIRTensorDialect
-    MLIRFuncDialect
     MLIRArithDialect
-    MLIRLinalgDialect
-    MLIRFuncTransforms
+    MLIRFuncDialect
+    MLIRMemRefDialect
+    MLIRSCFDialect
+    MLIRTensorDialect
 
     MLIRIR
     MLIRPass
     MLIRSupport
+    MLIRFuncTransforms
 )

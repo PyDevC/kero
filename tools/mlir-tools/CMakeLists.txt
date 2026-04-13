@@ -6,10 +6,11 @@ set(LIBS
     ${conversion_libs}
     MLIRIR
 
-    MLIRFuncDialect
     MLIRArithDialect
+    MLIRFuncDialect
+    MLIRMemRefDialect
+    MLIRSCFDialect
     MLIRTensorDialect
-    MLIRLinalgDialect
 
     MLIROptLib
     MLIRPass
