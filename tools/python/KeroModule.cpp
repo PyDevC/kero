@@ -1,5 +1,7 @@
 #include "Conversion/DBToTensor/DBToTensor.h"
 #include "Dialect/DB/IR/DBDialect.h"
+#include "Dialect/DB/IR/DBOps.h"
+#include "Dialect/DB/IR/DBTypes.h"
 
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/IR/BuiltinOps.h"

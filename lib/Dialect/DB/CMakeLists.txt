@@ -3,6 +3,7 @@ add_mlir_dialect_library(DB
 
     DEPENDS
     DBDialectIncGen
+    DBOpsIncGen
 
     LINK_LIBS PUBLIC
     MLIRDialect

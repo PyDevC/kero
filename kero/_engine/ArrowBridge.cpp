@@ -1,8 +1,14 @@
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
 #include <arrow/tensor.h>
-
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <memory>
+
+namespace nb = nanobind;
+using namespace nb::literals;
 
 // Descriptor for a 2D MemRef matching ranked_tensor<100x1000xf32>
 struct MemRef2D {
@@ -14,26 +20,24 @@ struct MemRef2D {
 };
 
 class ArrowTableTensorFormat {
-    private:
-    public:
+public:
+    ArrowTableTensorFormat() = default;
+
     /// Convert a column from arrow table to tensor of floating point
     std::shared_ptr<arrow::Tensor> arrowToTensor(
         std::shared_ptr<arrow::Table> table,
         const std::string& columnName,
         const std::vector<int64_t>& shape) {
-        // TODO: Add the type option to params so that you can change the type
-        // of the tensor from function call.
+        
         auto column = table->GetColumnByName(columnName);
-        // TODO: Check if you even need to do this or not.
         if (!column) { return nullptr; }
 
-        std::shared_ptr<arrow::Array> fullArray;
         arrow::Result<std::shared_ptr<arrow::Array>> combinedResult =
             arrow::Concatenate(column->chunks());
 
         if (!combinedResult.ok()) { return nullptr; }
 
-        fullArray = combinedResult.ValueOrDie();
+        auto fullArray = combinedResult.ValueOrDie();
         auto floatArray = std::static_pointer_cast<arrow::FloatArray>(fullArray);
         std::shared_ptr<arrow::Buffer> columnBuffer = floatArray->values();
 
@@ -57,13 +61,22 @@ class ArrowTableTensorFormat {
         
         return descriptor;
     }
-
-    void executeQuery(MemRef2D input, MemRef2D *output, 
-                     void (*mlir_func)(float*, float*, int64_t, int64_t, int64_t, int64_t, int64_t)) {
-        mlir_func(
-            input.allocated, input.aligned, input.offset, 
-            input.sizes[0], input.sizes[1], 
-            input.strides[0], input.strides[1]
-        );
-    }
 };
+
+NB_MODULE(_arrow_bridge, m) {
+    // We bind the MemRef2D struct so Python can handle the return type
+    nb::class_<MemRef2D>(m, "MemRef2D")
+        .def_rw("offset", &MemRef2D::offset)
+        .def_prop_ro("sizes", [](const MemRef2D &m) { 
+            return std::vector<int64_t>{m.sizes[0], m.sizes[1]}; 
+        })
+        .def_prop_ro("strides", [](const MemRef2D &m) { 
+            return std::vector<int64_t>{m.strides[0], m.strides[1]}; 
+        });
+
+    nb::class_<ArrowTableTensorFormat>(m, "ArrowTableTensorFormat")
+        .def(nb::init<>())
+        .def("arrow_to_tensor", &ArrowTableTensorFormat::arrowToTensor, 
+             "table"_a, "column_name"_a, "shape"_a)
+        .def("tensor_to_memref", &ArrowTableTensorFormat::tensorToMemRef, "tensor"_a);
+}

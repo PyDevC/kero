@@ -1,5 +1,5 @@
 set(DEV_MODULE Development.Module)
-find_package(Python 3.9 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
+find_package(Python 3.12 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
@@ -17,8 +17,12 @@ target_link_libraries(_kero
     MLIRIR
     MLIRPass
     MLIRSupport
+    MLIRFuncDialect
+    MLIRLinalgDialect
+    MLIRTensorDialect
+    MLIRArithDialect
 )
 
-target_include_directories(_kero PRIVATE ${PROJECT_SOURCE_DIR}/include)
-target_compile_features(_kero PRIVATE cxx_std_17)
+target_include_directories(_kero PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(_kero PUBLIC cxx_std_17)
 install(TARGETS _kero LIBRARY DESTINATION kero)

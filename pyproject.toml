@@ -28,6 +28,7 @@ torch = ["torch>=2.5.0"]
 cmake.version = ">=3.20"
 
 cmake.args = [
+    "-DMLIR_ENABLE_BINDINGS_PYTHON=ON",
     "-DTHIRDPARTY_LLVM_DIR=${THIRDPARTY_LLVM_DIR}",
     "-DMLIR_DIR=${MLIR_DIR}",
     "-DLLVM_DIR=${LLVM_DIR}"
