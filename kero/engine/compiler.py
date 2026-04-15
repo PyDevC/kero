@@ -1,7 +1,39 @@
 import torch
 from typing import Dict, List, Union
 from kero import TableTensor
-from kero.engine.operations.operators import eq, gt, lt, ge, le, ne, add, sub, prod, div
+from kero.engine.operations.operators import (
+    EqOp as eq, GtOp as gt, LtOp as lt, GeOp as ge, LeOp as le, NeOp as ne,
+    AddOp as add, SubOp as sub, ProdOp as prod, DivOp as div,
+)
+from kero.engine.operations.operators import Operator, BinaryOperator, UnaryOperator
+
+
+class OperatorRegistry:
+    _operators: Dict[str, type] = {
+        "=": EqOp,
+        "!=": NeOp,
+        ">": GtOp,
+        "<": LtOp,
+        ">=": GeOp,
+        "<=": LeOp,
+        "+": AddOp,
+        "-": SubOp,
+        "*": ProdOp,
+        "/": DivOp,
+    }
+
+    @classmethod
+    def get_operator(cls, symbol: str) -> type:
+        if symbol not in cls._operators:
+            raise ValueError(f"Unsupported operator: {symbol}")
+        return cls._operators[symbol]
+
+    @classmethod
+    def register(cls, symbol: str, operator_class: type):
+        if not issubclass(operator_class, BinaryOperator) and not issubclass(operator_class, UnaryOperator):
+            raise TypeError("Operator must be a BinaryOperator or UnaryOperator")
+        cls._operators[symbol] = operator_class
+
 
 class KeroCompiler:
     """Compiler Executes the code and generates a mask for torch.select_masked
@@ -28,14 +60,13 @@ class KeroCompiler:
     def _get_tensor(self, operand: Union[str, int]) -> torch.Tensor:
         """gets the tensors from the operands in the kquery
         """
-        try:
-            operand = int(operand)
-        except:
-            pass
+        if isinstance(operand, int):
+            return torch.tensor([operand])
         if isinstance(operand, str):
-            # Operand is a column name
-            return self.table.columns[operand].tensor
-        # Operand is a constant value
+            try:
+                return self.table.columns[operand].tensor
+            except KeyError:
+                raise KeyError(f"Column '{operand}' not found in table '{self.table.name}'")
         return torch.tensor([operand])
 
     def _execute_operation(self, operator: str, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
@@ -46,23 +77,5 @@ class KeroCompiler:
         if not isinstance(left, torch.Tensor):
             right = torch.tensor(left)
 
-        if operator == "=":
-            mask = eq(left, right).execute()
-            return mask
-        elif operator == "!=":
-            mask = ne(left, right).execute()
-            return mask
-        elif operator == ">":
-            mask = gt(left, right).execute()
-            return mask
-        elif operator == "<":
-            mask = lt(left, right).execute()
-            return mask
-        elif operator == ">=":
-            mask = ge(left, right).execute()
-            return mask
-        elif operator == "<=":
-            mask = le(left, right).execute()
-            return mask
-        
-        raise ValueError(f"Unsupported operator: {operator}")
+        operator_class = OperatorRegistry.get_operator(operator)
+        return operator_class(left, right).execute()

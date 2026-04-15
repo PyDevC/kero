@@ -1,5 +1,0 @@
-numpy
-pandas
-psycopg2
-sqlglot
-sqlparse

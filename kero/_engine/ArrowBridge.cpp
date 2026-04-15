@@ -38,6 +38,9 @@ public:
         if (!combinedResult.ok()) { return nullptr; }
 
         auto fullArray = combinedResult.ValueOrDie();
+        if (fullArray->type()->id() != arrow::Type::FLOAT) {
+            return nullptr;
+        }
         auto floatArray = std::static_pointer_cast<arrow::FloatArray>(fullArray);
         std::shared_ptr<arrow::Buffer> columnBuffer = floatArray->values();
 
