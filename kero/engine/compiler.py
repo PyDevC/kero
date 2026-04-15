@@ -247,3 +247,6 @@ class Compiler:
 
     def __repr__(self) -> str:
         return f"Compiler(module_fns={len(self._module)})"
+
+
+KeroCompiler = Compiler

@@ -7,6 +7,7 @@ from .tensors import (
 )
 
 import kero.engine as engine
+import kero.data as data
 
 __all__ = [
     "DateTensor",
@@ -14,10 +15,8 @@ __all__ = [
     "ScalarTensor",
     "StrTensor",
     "TableTensor",
+    "data",
     "engine",
 ]
 
-assert __all__ == sorted(__all__)
-
-# Please keep this list sorted
 assert __all__ == sorted(__all__)

@@ -12,7 +12,7 @@ class Executor:
             data: TableTensor that assocates to a single compiler
         """
         self.data = data
-        self.compiler = KeroCompiler(data)
+        self.compiler = KeroCompiler()
         self.result = None
 
     def execute(self, kquery: Dict[str, Any]) -> torch.Tensor:
