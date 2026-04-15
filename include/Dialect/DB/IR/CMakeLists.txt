@@ -3,6 +3,7 @@ mlir_tablegen(DBDialect.h.inc -gen-dialect-decls -name=DB)
 mlir_tablegen(DBDialect.cpp.inc -gen-dialect-defs -name=DB)
 mlir_tablegen(DBDialectType.h.inc -gen-typedef-decls -name=DB)
 mlir_tablegen(DBDialectType.cpp.inc -gen-typedef-defs -name=DB)
+add_public_tablegen_target(DBDialectTypeIncGen)
 
 set(LLVM_TARGET_DEFINITIONS DBOps.td)
 mlir_tablegen(DBOps.h.inc -gen-op-decls -name=DB)

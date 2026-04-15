@@ -22,15 +22,23 @@
 //
 // Pass pipeline (§5.1):
 //   1. DBToTensorPass        (custom)  db-dialect → tensor/linalg/arith
-//   2. One-Shot Bufferization          tensor → memref
-//   3. convert-memref-to-llvm  }
-//      convert-linalg-to-loops }       memref/func → LLVM dialect
-//      lower-affine            }
-//      convert-scf-to-cf       }
-//      convert-func-to-llvm    }
-//      arith-to-llvm           }
-//      reconcile-unrealized-casts
-//   4. mlir::ExecutionEngine::create() → JIT function pointer
+//   2. Canonicalization
+//   3. One-Shot Bufferization          tensor → memref
+//   4. Buffer cleanup passes
+//   5. convert-linalg-to-loops
+//      lower-affine
+//      convert-scf-to-cf
+//      convert-memref-to-llvm  (§5.4: convert-memref-to-llvm)
+//      convert-func-to-llvm    (§5.4: convert-func-to-llvm)
+//      arith-to-llvm
+//      convert-cf-to-llvm
+//      reconcile-unrealized-casts (§5.4)
+//   6. mlir::ExecutionEngine::create() → JIT function pointer
+//
+// FIX: The createDBToTensor() function is in namespace mlir::db per
+// DBToTensor.cpp.  The call site must use that namespace.
+// FIX: createDBToTensorPass() is the exported symbol name used in the
+// header — kept consistent with DBToTensor.h.inc generated registration.
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
@@ -63,8 +71,9 @@
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
 #include "llvm/Support/TargetSelect.h"
 
-#include "Dialect/DBDialect.h"
-#include "Conversion/DBToTensorPass.h"
+// DB dialect and its lowering pass.
+#include "Dialect/DB/IR/DBDialect.h"
+#include "Conversion/DBToTensor/DBToTensor.h"
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -89,7 +98,8 @@ using namespace nb::literals;
 //   jit_fn             — callable via call_jit(); takes void** ABI args
 //   table_name         — used by Executor to find the Arrow Table
 //   referenced_columns — ordered list matching arg1..N in @query
-//   n_cols             — C dimension (static column count)
+//   n_cols             — C dimension (static column count in the schema)
+//   ir_text            — original db-dialect IR text for debugging
 //   engine_ref         — keeps the JIT code alive; never drop this
 // ===========================================================================
 
@@ -106,13 +116,13 @@ struct CompiledQuery {
 // KeroModule
 //
 // Owns the MLIRContext for one KeroEngine instance.  Python creates
-// exactly one KeroModule per engine.
+// exactly one KeroModule per engine (Developer Guide §2.3: one context).
 // ===========================================================================
 
 class KeroModule {
 public:
     KeroModule() {
-        // Initialise LLVM backend targets (idempotent).
+        // Initialise LLVM backend targets (idempotent across multiple calls).
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();
         llvm::InitializeNativeTargetAsmParser();
@@ -128,29 +138,39 @@ public:
             mlir::bufferization::BufferizationDialect,
             mlir::scf::SCFDialect,
             mlir::cf::ControlFlowDialect,
-            kero::db::DBDialect
+            mlir::db::DBDialect       // custom db dialect
         >();
+
+        // Enable multi-threading for the context if desired.  For now keep
+        // single-threaded so pass-manager diagnostics are sequential.
+        _ctx->disableMultithreading();
     }
 
     // -----------------------------------------------------------------------
     // compile_cpu
     //
-    // Steps (§5.1 – §5.5):
-    //   1. Parse textual IR → ModuleOp in shared context
-    //   2. Run DBToTensorPass (custom, §5.2)
-    //   3. One-Shot Bufferization (§5.3)
-    //   4. LLVM conversion passes (§5.4)
-    //   5. ExecutionEngine JIT (§5.5)
-    //   6. Return CompiledQuery (§5.6)
+    // Full CPU lowering pipeline (Developer Guide §5.1 – §5.5):
+    //   1. Parse textual IR (db-dialect MLIR) → ModuleOp in shared context
+    //   2. Run DBToTensorPass  (db → tensor/linalg/arith)
+    //   3. One-Shot Bufferization (tensor → memref)
+    //   4. LLVM conversion passes
+    //   5. ExecutionEngine JIT → function pointer
+    //   6. Return CompiledQuery
+    //
+    // Parameters
+    // ----------
+    // ir_text            : textual MLIR module emitted by IREmitter
+    // table_name         : name of the queried table (for Executor lookup)
+    // referenced_columns : column arg order contract (Developer Guide §10.1)
+    // n_cols             : static column count (C dimension for the JIT ABI)
     // -----------------------------------------------------------------------
-
     CompiledQuery compile_cpu(
         const std::string &ir_text,
         const std::string &table_name,
         const std::vector<std::string> &referenced_columns,
         int64_t n_cols
     ) {
-        // -- 1. Parse --------------------------------------------------
+        // ---- 1. Parse IR ------------------------------------------------
         mlir::OwningOpRef<mlir::ModuleOp> module =
             mlir::parseSourceString<mlir::ModuleOp>(ir_text, _ctx.get());
         if (!module) {
@@ -159,8 +179,9 @@ public:
             );
         }
 
-        // -- 2–4. Run the pass pipeline --------------------------------
+        // ---- 2–4. Run pass pipeline -------------------------------------
         mlir::PassManager pm(_ctx.get());
+        pm.enableVerifier(true);
         _build_cpu_pipeline(pm);
 
         if (mlir::failed(pm.run(*module))) {
@@ -170,7 +191,9 @@ public:
             );
         }
 
-        // -- 5. JIT via ExecutionEngine --------------------------------
+        // ---- 5. JIT via ExecutionEngine ----------------------------------
+        // Developer Guide §5.5: ExecutionEngine wraps LLVM ORC JIT.
+        // It must stay alive as long as the function pointer is in use.
         auto maybeEngine = mlir::ExecutionEngine::create(
             *module,
             /*llvmModuleBuilder=*/nullptr,
@@ -183,11 +206,11 @@ public:
                 [&](const llvm::ErrorInfoBase &e) { msg = e.message(); }
             );
             throw std::runtime_error(
-                "KeroModule.compile_cpu: ExecutionEngine creation failed: "
-                + msg
+                "KeroModule.compile_cpu: ExecutionEngine creation failed: " + msg
             );
         }
 
+        // Wrap in shared_ptr so it survives the CompiledQuery lifetime.
         auto engine = std::make_shared<mlir::ExecutionEngine>(
             std::move(*maybeEngine)
         );
@@ -208,10 +231,10 @@ public:
         // Cast to the void** ABI expected by ExecutionEngine (§5.5).
         auto rawFn = reinterpret_cast<void (*)(void **)>(*fnSym);
 
-        // Capture engine_ref so the JIT code outlives any individual call.
+        // Capture engine so JIT code outlives any individual call.
         auto jit_fn = [rawFn, engine](void **args) { rawFn(args); };
 
-        // -- 6. Build CompiledQuery ------------------------------------
+        // ---- 6. Build and return CompiledQuery ---------------------------
         CompiledQuery cq;
         cq.jit_fn             = std::move(jit_fn);
         cq.table_name         = table_name;
@@ -228,7 +251,6 @@ public:
     // The GPU path branches off after bufferization (§9.1).  The CPU
     // pipeline is fully isolated; no GPU code touches it.
     // -----------------------------------------------------------------------
-
     CompiledQuery compile_gpu(
         const std::string & /*ir_text*/,
         const std::string & /*table_name*/,
@@ -243,11 +265,13 @@ public:
     }
 
     // -----------------------------------------------------------------------
-    // verify_ir — parse + verify without running the pipeline.
-    // Useful for testing the IR Emitter in isolation.
+    // verify_ir
+    //
+    // Parse and verify IR without running the pass pipeline.
     // Returns "" on success, error string on failure.
+    // Useful for testing the IR Emitter in isolation (Developer Guide §11,
+    // Phase 1 milestone).
     // -----------------------------------------------------------------------
-
     std::string verify_ir(const std::string &ir_text) {
         mlir::OwningOpRef<mlir::ModuleOp> module =
             mlir::parseSourceString<mlir::ModuleOp>(ir_text, _ctx.get());
@@ -258,39 +282,72 @@ public:
         return "";
     }
 
+    // -----------------------------------------------------------------------
+    // lower_to_llvm_ir
+    //
+    // Run the full lowering pipeline and return the LLVM IR text.
+    // This is a diagnostic/debugging helper — the normal path uses
+    // compile_cpu() which goes all the way to a JIT function pointer.
+    //
+    // Returns the LLVM IR as a string, or throws on failure.
+    // -----------------------------------------------------------------------
+    std::string lower_to_llvm_ir(const std::string &ir_text) {
+        mlir::OwningOpRef<mlir::ModuleOp> module =
+            mlir::parseSourceString<mlir::ModuleOp>(ir_text, _ctx.get());
+        if (!module)
+            throw std::runtime_error("lower_to_llvm_ir: IR parse failed");
+
+        mlir::PassManager pm(_ctx.get());
+        _build_cpu_pipeline(pm);
+
+        if (mlir::failed(pm.run(*module)))
+            throw std::runtime_error("lower_to_llvm_ir: pass pipeline failed");
+
+        std::string llvmIR;
+        llvm::raw_string_ostream os(llvmIR);
+        module->print(os);
+        return llvmIR;
+    }
+
 private:
     std::unique_ptr<mlir::MLIRContext> _ctx;
 
     // -----------------------------------------------------------------------
     // _build_cpu_pipeline
     //
-    // Populates a PassManager with the lowering sequence described in §5.1.
+    // Populates a PassManager with the full lowering sequence.
     //
-    // Stage 1 — DBToTensorPass
-    //   db-dialect → tensor/linalg/arith.  No db-dialect ops remain after.
+    // Stage 1 — DBToTensorPass (Developer Guide §5.2)
+    //   db-dialect ops → tensor/linalg/arith.  No db ops remain after.
+    //   Canonicalization cleans up trivially dead code.
     //
-    // Stage 2 — One-Shot Bufferization (§5.3)
+    // Stage 2 — One-Shot Bufferization (Developer Guide §5.3)
     //   tensor (value semantics) → memref (memory semantics).
-    //   bufferizeFunctionBoundaries=true ensures function arguments and
-    //   return values are also bufferized, which is required because the
-    //   JIT ABI passes memref descriptors directly.
+    //   bufferizeFunctionBoundaries=true is required because the JIT ABI
+    //   passes memref descriptors across the function boundary.
     //
-    // Stage 3 — LLVM conversion (§5.4)
-    //   linalg → loops → standard CF → LLVM.
-    //   Three mandatory passes + reconcile-unrealized-casts.
+    // Stage 3 — Loop and arithmetic lowering
+    //   linalg.generic → SCF loops → ControlFlow
+    //
+    // Stage 4 — LLVM dialect conversion (Developer Guide §5.4)
+    //   memref, func, arith, cf → LLVM dialect.
+    //   reconcile-unrealized-casts cleans up any remaining cast ops.
     // -----------------------------------------------------------------------
-
     static void _build_cpu_pipeline(mlir::PassManager &pm) {
-        // ---- Stage 1: db-dialect → tensor/linalg/arith ---------------
-        pm.addPass(kero::createDBToTensorPass());
+        // ---- Stage 1: db-dialect → tensor/linalg/arith ------------------
+        // FIX: createDBToTensorPass() is the exported name in DBToTensor.h
+        // (generated from the .td pass definition via GEN_PASS_REGISTRATION).
+        // The implementation lives in namespace mlir::db, but the header
+        // exposes it through the mlir namespace via the generated glue.
+        pm.addPass(mlir::db::createDBToTensorPass());
         pm.addPass(mlir::createCanonicalizationPass());
 
-        // ---- Stage 2: One-Shot Bufferization -------------------------
+        // ---- Stage 2: One-Shot Bufferization ----------------------------
         mlir::bufferization::OneShotBufferizationOptions bufOpts;
         bufOpts.allowReturnAllocsFromLoops  = true;
         bufOpts.bufferizeFunctionBoundaries = true;
-        // Allow unknown ops to be bufferized (needed for linalg.generic
-        // with dynamic shapes before all patterns are registered).
+        // Allow ops not covered by a specific bufferization pattern to be
+        // treated as unknown (safe for our tensor/linalg dialect mix).
         bufOpts.defaultMemorySpaceFn =
             [](mlir::TensorType) -> std::optional<mlir::Attribute> {
                 return std::nullopt;
@@ -304,22 +361,24 @@ private:
         pm.addPass(mlir::bufferization::createBufferDeallocationPass());
         pm.addPass(mlir::createCanonicalizationPass());
 
-        // ---- Stage 3: linalg/tensor/memref → LLVM -------------------
-        // 3a. Linalg on tensors → loops
+        // ---- Stage 3: linalg/SCF → ControlFlow -------------------------
+        // 3a. linalg.generic → SCF loops
         pm.addPass(mlir::createConvertLinalgToLoopsPass());
-        // 3b. Affine → standard SCF
+        // 3b. Affine maps → standard SCF
         pm.addPass(mlir::createLowerAffinePass());
-        // 3c. SCF → ControlFlow
+        // 3c. SCF → ControlFlow CFG
         pm.addPass(mlir::createConvertSCFToControlFlowPass());
-        // 3d. MemRef → LLVM  (Developer Guide §5.4: convert-memref-to-llvm)
+
+        // ---- Stage 4: LLVM conversion -----------------------------------
+        // 4a. MemRef → LLVM struct descriptors (Developer Guide §5.4)
         pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-        // 3e. Func → LLVM   (Developer Guide §5.4: convert-func-to-llvm)
+        // 4b. func.func / func.return → llvm.func / llvm.return
         pm.addPass(mlir::createConvertFuncToLLVMPass());
-        // 3f. Arith → LLVM
+        // 4c. arith → LLVM arithmetic ops
         pm.addPass(mlir::createArithToLLVMConversionPass());
-        // 3g. ControlFlow → LLVM
+        // 4d. ControlFlow → LLVM branch ops
         pm.addPass(mlir::createConvertControlFlowToLLVMPass());
-        // 3h. Reconcile any unrealized casts (Developer Guide §5.4)
+        // 4e. Reconcile any remaining unrealized casts (Developer Guide §5.4)
         pm.addPass(mlir::createReconcileUnrealizedCastsPass());
     }
 };
@@ -334,7 +393,7 @@ Kero MLIR compilation pipeline.
 
 This module exposes KeroModule and CompiledQuery to Python.  A single
 KeroModule instance is created per KeroEngine and shared across all
-queries (§2.3: one MLIRContext per engine).
+queries (Developer Guide §2.3: one MLIRContext per engine).
 
 Typical usage (handled automatically by kero/engine/compiler.py)::
 
@@ -344,7 +403,7 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
 )";
 
     // -----------------------------------------------------------------------
-    // CompiledQuery
+    // CompiledQuery Python bindings
     // -----------------------------------------------------------------------
     nb::class_<CompiledQuery>(m, "CompiledQuery",
         "Compiled query object returned by KeroModule.compile_cpu().\n\n"
@@ -355,18 +414,19 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
                 "Name of the table this query operates on.")
         .def_ro("referenced_columns",
                 &CompiledQuery::referenced_columns,
-                "Ordered column names matching function arg1..N.")
+                "Ordered column names matching function arg1..N.\n"
+                "This is the argument-order contract (Developer Guide §10.1).")
         .def_ro("ir_text",
                 &CompiledQuery::ir_text,
-                "Textual db-dialect MLIR (for debugging).")
+                "Original db-dialect MLIR text (for debugging).")
         .def_ro("n_cols",
                 &CompiledQuery::n_cols,
-                "Number of columns (static C dimension).")
+                "Number of columns (static C dimension, from schema).")
         .def("call_jit",
              [](CompiledQuery &cq, const std::vector<uintptr_t> &ptrs) {
-                 // Developer Guide §5.5: args are void** — a pointer to
-                 // an array of pointers, each pointing to a memref
-                 // descriptor struct (allocated by executor.cpp).
+                 // Developer Guide §5.5: the JIT ABI is void** — a pointer to
+                 // an array of void* pointers, each pointing to a memref
+                 // descriptor struct allocated by executor.cpp.
                  std::vector<void *> vptrs;
                  vptrs.reserve(ptrs.size());
                  for (auto p : ptrs)
@@ -384,7 +444,7 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
         });
 
     // -----------------------------------------------------------------------
-    // KeroModule
+    // KeroModule Python bindings
     // -----------------------------------------------------------------------
     nb::class_<KeroModule>(m, "KeroModule",
         "MLIR compilation pipeline owner.\n\n"
@@ -416,6 +476,12 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
              "Parse and verify *ir_text* without running the pass pipeline.\n"
              "Returns '' on success or an error message string on failure.\n"
              "Useful for testing the IR Emitter in isolation.")
+        .def("lower_to_llvm_ir",
+             &KeroModule::lower_to_llvm_ir,
+             "ir_text"_a,
+             "Run the full lowering pipeline on *ir_text* and return the\n"
+             "resulting LLVM dialect IR as a string.  Diagnostic helper;\n"
+             "production code uses compile_cpu() instead.")
         .def("__repr__", [](const KeroModule &) {
             return "<KeroModule>";
         });

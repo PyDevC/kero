@@ -47,7 +47,6 @@ __all__ = [
     "ge",
     "gt",
     "le",
-    "log",
     "lt",
     "max",
     "mean",

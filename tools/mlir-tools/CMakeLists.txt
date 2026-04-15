@@ -12,6 +12,9 @@ set(LIBS
     MLIRSCFDialect
     MLIRTensorDialect
 
+    DBToTensorPass
+    DB
+
     MLIROptLib
     MLIRPass
     MLIRTransforms
