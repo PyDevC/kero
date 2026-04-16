@@ -11,7 +11,7 @@
 //   - The mlir::ExecutionEngine JIT that produces callable function
 //     pointers
 //   - The nanobind Python bindings that expose compile_cpu() and
-//     compile_gpu() (stub) to Python
+//     compile_gpu() to Python
 //
 // Architecture notes (Developer Guide §2.3, §5):
 //   - One MLIRContext per engine lifetime.  ALL IR objects are interned
@@ -62,6 +62,19 @@
 //     function boundary (void** ABI).  Setting this to false means the
 //     function signature stays in tensor-land and the ExecutionEngine
 //     cannot generate the right calling convention stubs.
+//
+//   FIX 4 — GPU pipeline must include GpuToLLVMConversionPass.
+//     Without createGpuToLLVMConversionPass() the gpu.launch_func ops
+//     that call into the CUDA/ROCm runtime (cudaLaunchKernel etc.) are
+//     never lowered to LLVM calls, causing ExecutionEngine to fail.
+//
+//   FIX 5 — Removed unused SparseTensor includes.
+//     SparseTensor headers are not needed and break builds on MLIR
+//     installations compiled without sparse tensor support.
+//
+//   FIX 6 — Added missing GPU LLVM IR translation include.
+//     registerGPUDialectTranslation() requires
+//     mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h.
 
 #include "llvm/Support/TargetSelect.h"
 
@@ -90,6 +103,10 @@
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+// FIX 5: Removed unused SparseTensor headers — they require MLIR to be
+// built with sparse tensor support, breaking builds without it.
+// #include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
+// #include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
@@ -97,8 +114,6 @@
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
-#include "mlir/Dialect/SparseTensor/Pipelines/Passes.h"
-#include "mlir/Dialect/SparseTensor/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 
@@ -117,6 +132,8 @@
 // registered into the DialectRegistry before the MLIRContext is built.
 #include "mlir/Target/LLVMIR/Dialect/All.h"
 #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
+// FIX 6: Missing header — required by registerGPUDialectTranslation().
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 
 #include "mlir/Transforms/Passes.h"
@@ -201,7 +218,9 @@ class KeroModule {
         //    dialect for op: func.func"
         mlir::registerAllToLLVMIRTranslations(registry);
 
-        // GPU dialect translation for CUDA/ROCm support.
+        // FIX 6: GPU dialect translation for CUDA/ROCm support.
+        // Requires mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h
+        // (now included above).
         mlir::registerGPUDialectTranslation(registry);
 
         // The two explicit calls below are already included by
@@ -226,7 +245,7 @@ class KeroModule {
             mlir::bufferization::BufferizationDialect,
             mlir::scf::SCFDialect,
             mlir::cf::ControlFlowDialect,
-            mlir::LLVM::LLVMDialect, // FIX 2: was missing
+            mlir::LLVM::LLVMDialect,    // FIX 2: was missing
             mlir::db::DBDialect,
             mlir::gpu::GPUDialect>();
 
@@ -336,7 +355,7 @@ class KeroModule {
     //   3. One-Shot Bufferization (tensor → memref)
     //   4. GPU lowering passes (convert to gpu dialect, emit gpu.launch_func)
     //   5. GPU to NVVM/ROCM conversion (gpu → NVVM/ROCm LLVM)
-    //   6. GPU to LLVM conversion (gpu runtime calls → LLVM)
+    //   6. GPU to LLVM conversion (gpu runtime calls → LLVM)  [FIX 4]
     //   7. ExecutionEngine JIT → function pointer
     //   8. Return CompiledQuery
     //
@@ -362,7 +381,7 @@ class KeroModule {
                 "KeroModule.compile_gpu: IR parse failed.\nIR:\n" + ir_text);
         }
 
-        // ---- 2–5. Run GPU pass pipeline -----------------------------------
+        // ---- 2–6. Run GPU pass pipeline -----------------------------------
         mlir::PassManager pm(_ctx.get());
         pm.enableVerifier(true);
 
@@ -382,7 +401,7 @@ class KeroModule {
                 table_name + "' (target='" + target + "')");
         }
 
-        // ---- 6. JIT via ExecutionEngine ------------------------------------
+        // ---- 7. JIT via ExecutionEngine ------------------------------------
         mlir::ExecutionEngineOptions options;
         auto maybeEngine = mlir::ExecutionEngine::create(*module, options);
 
@@ -527,6 +546,12 @@ class KeroModule {
     //
     // GPU pipeline for NVIDIA (CUDA) targets.
     // Uses gpu-kernel-outlining + convert-gpu-to-nvvm + gpu-to-llvm pattern.
+    //
+    // FIX 4: Added createGpuToLLVMConversionPass() (Stage 6).
+    // Without it, gpu.launch_func ops that call into the CUDA runtime
+    // (cudaLaunchKernel, cudaMemcpy etc.) are never lowered to LLVM calls.
+    // The ExecutionEngine then cannot find those symbols and fails at JIT
+    // time with "undefined symbol" errors.
     // -----------------------------------------------------------------------
     static void _build_gpu_pipeline_nvidia(mlir::PassManager& pm) {
         // ---- Stage 1: db-dialect → tensor/linalg/arith -------------------
@@ -547,12 +572,17 @@ class KeroModule {
         pm.addPass(mlir::createLowerAffinePass());
         pm.addPass(mlir::createSCFToControlFlowPass());
 
-        // ---- Stage 4: GPU dialect lowering -------------------------------
-        // Outline gpu.launch bodies to gpu kernels and wrap in gpu.module
+        // ---- Stage 4: GPU kernel outlining -------------------------------
+        // Outline gpu.launch bodies to gpu kernels and wrap in gpu.module.
         pm.addPass(mlir::createGpuKernelOutliningPass());
 
-        // ---- Stage 5: GPU to NVVM (CUDA) --------------------------------
+        // ---- Stage 5: GPU → NVVM (CUDA) ----------------------------------
         pm.addPass(mlir::createConvertGpuOpsToNVVMOps());
+
+        // ---- Stage 6: GPU runtime calls → LLVM  (FIX 4) -----------------
+        // Lower gpu.launch_func / cudaLaunchKernel / cudaMemcpy etc. to
+        // LLVM function calls so the ExecutionEngine can link them.
+        pm.addPass(mlir::createGpuToLLVMConversionPass());
 
         // ---- Stage 7: Final LLVM conversion -----------------------------
         pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
@@ -568,6 +598,9 @@ class KeroModule {
     // GPU pipeline for AMD (ROCm) targets.
     // Uses gpu-kernel-outlining + convert-gpu-to-rocm + gpu-to-llvm pattern.
     // Note: ROCm support depends on MLIR build configuration.
+    //
+    // FIX 4: Added createGpuToLLVMConversionPass() (Stage 6) — same
+    // reasoning as for the NVIDIA pipeline above.
     // -----------------------------------------------------------------------
     static void _build_gpu_pipeline_amd(mlir::PassManager& pm) {
         // ---- Stage 1: db-dialect → tensor/linalg/arith -------------------
@@ -588,10 +621,10 @@ class KeroModule {
         pm.addPass(mlir::createLowerAffinePass());
         pm.addPass(mlir::createSCFToControlFlowPass());
 
-        // ---- Stage 4: GPU dialect lowering -------------------------------
+        // ---- Stage 4: GPU kernel outlining --------------------------------
         pm.addPass(mlir::createGpuKernelOutliningPass());
 
-        // ---- Stage 5: GPU to ROCm (AMD) ---------------------------------
+        // ---- Stage 5: GPU → ROCm (AMD) -----------------------------------
 #ifdef MLIR_ROCM_ENABLED
         pm.addPass(mlir::createConvertGpuOpsToROCmOps());
 #else
@@ -600,10 +633,11 @@ class KeroModule {
             "Rebuild MLIR with ROCm support enabled.");
 #endif
 
-        // ---- Stage 6: Final LLVM conversion ------------------------------
-        // Note: GPU-to-LLVM runtime calls (createGpuToLLVMConversionPass)
-        // not available in current MLIR build. Kernels will be invoked via
-        // standard LLVM function calls after lowering.
+        // ---- Stage 6: GPU runtime calls → LLVM  (FIX 4) -----------------
+        // Lower gpu.launch_func / hipLaunchKernel etc. to LLVM calls.
+        pm.addPass(mlir::createGpuToLLVMConversionPass());
+
+        // ---- Stage 7: Final LLVM conversion ------------------------------
         pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
         pm.addPass(mlir::createConvertFuncToLLVMPass());
         pm.addPass(mlir::createArithToLLVMConversionPass());
@@ -660,11 +694,11 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
                  for (auto p : ptrs)
                      vptrs.push_back(reinterpret_cast<void*>(p));
                  cq.jit_fn(vptrs.data()); }, "ptrs"_a, "Call the JIT-compiled @query function.\n\n"
-                                                                                                  "ptrs must be a list of integer addresses of memref descriptor\n"
-                                                                                                  "structs, in the argument order recorded in referenced_columns.\n"
-                                                                                                  "The first entry is always the full-table memref (arg0).")
+                                                                                                 "ptrs must be a list of integer addresses of memref descriptor\n"
+                                                                                                 "structs, in the argument order recorded in referenced_columns.\n"
+                                                                                                 "The first entry is always the full-table memref (arg0).")
         .def("__repr__", [](const CompiledQuery& cq) { return "<CompiledQuery table='" + cq.table_name +
-                                                           "' n_cols=" + std::to_string(cq.n_cols) + ">"; });
+                                                          "' n_cols=" + std::to_string(cq.n_cols) + ">"; });
 
     // -----------------------------------------------------------------------
     // KeroModule Python bindings
@@ -691,8 +725,11 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
              "referenced_columns"_a,
              "n_cols"_a,
              "target"_a = "nvidia",
-             "GPU compilation — raises RuntimeError (not yet implemented).\n"
-             "See Developer Guide §9 for the intended design.")
+             "GPU compilation pipeline.\n\n"
+             "Compiles the query for NVIDIA (target='nvidia'/'cuda') or\n"
+             "AMD (target='amd'/'rocm') GPU targets.\n"
+             "Raises RuntimeError if the pipeline fails or the target is\n"
+             "unsupported (ROCm requires an MLIR build with ROCm enabled).")
         .def("verify_ir",
              &KeroModule::verify_ir,
              "ir_text"_a,

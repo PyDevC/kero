@@ -24,12 +24,14 @@ target_link_libraries(_kero
     MLIRFuncDialect
     MLIRGPUDialect
     MLIRGPUTransforms
-    MLIRGPUToNVVM
-    MLIRGPUToROCDL
+
     MLIRLinalgDialect
     MLIRLinalgTransforms
     MLIRMemRefDialect
     MLIRMemRefTransforms
+
+    MLIRNVVMDialect
+    MLIRNVVMToLLVMIRTranslation
     MLIRSCFDialect
     MLIRSCFTransforms
     MLIRTensorDialect
@@ -41,10 +43,15 @@ target_link_libraries(_kero
     MLIRFuncToLLVM
     MLIRMemRefToLLVM
     MLIRReconcileUnrealizedCasts
+    
+    MLIRBuiltinToLLVMIRTranslation
+    MLIRLLVMToLLVMIRTranslation
     MLIRToLLVMIRTranslationRegistration
     MLIRSCFToControlFlow
     MLIRGPUToLLVMIRTranslation
 
+   
+    MLIRLLVMDialect
     MLIRIR
     MLIRParser
     MLIRPass
@@ -76,5 +83,7 @@ target_link_libraries(_arrow_bridge
 )
 
 target_include_directories(_arrow_bridge PRIVATE ${PROJECT_SOURCE_DIR}/include)
+# FIX E: _arrow_bridge also needs C++17 (nanobind requires it anyway)
+target_compile_features(_arrow_bridge PUBLIC cxx_std_17)
 
 install(TARGETS _arrow_bridge DESTINATION kero)
