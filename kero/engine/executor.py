@@ -20,6 +20,7 @@ class Executor:
         maps the output to the columns dict
         """
         mask = self.compiler.compile(kquery['operations'])
+        print(mask)
         
         if 'columns' in kquery:
             selected_columns = kquery['columns']
