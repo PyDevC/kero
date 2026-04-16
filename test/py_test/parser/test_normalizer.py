@@ -34,12 +34,18 @@ def test_parser_compiler():
     """Test parsing and compiling a SQL query."""
     print("=== Test: Parser + Compiler ===")
 
-    table = create_sample_data()
+    table = pa.table({
+        "id": [1, 2, 3, 4, 5],
+        "name": ["alice", "bob", "carol", "dave", "eve"],
+        "age": [25, 30, 35, 40, 45],
+        "salary": [50000.0, 60000.0, 70000.0, 80000.0, 90000.0],
+    })
 
     try:
         compiler = Compiler()
         parser = Parser()
         parser.attach_module(compiler.module)
+        parser.registry.register("employees", table)
 
         meta = parser.parse("SELECT id, name, age FROM employees WHERE age > 30")
         print(f"Parsed query, table: {meta.table_name}")
