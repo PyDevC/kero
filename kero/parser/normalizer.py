@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Optional
+import sqlglot.expressions as exp
 
 from kero.parser.ast_nodes import (
     ColumnRef, Literal, BinaryExpr, Expr,
@@ -26,7 +27,7 @@ class Normalizer:
     >>> rel_tree = norm.normalize(query_ast)
     """
 
-    def normalize(self, query) -> RelNode:
+    def normalize(self, query: exp.Select) -> RelNode:
         """Main entry point: convert a Query node to a RelNode tree.
 
         Builds bottom-up: SCAN → FILTER (if WHERE) → PROJECT (always).
@@ -36,34 +37,22 @@ class Normalizer:
         rel = self._extract_projection(query, rel)
         return rel
 
-    def _extract_source(self, query) -> ScanNode:
-        from_clause = query._from
-        if from_clause is None:
-            raise NormalizationError("Query has no FROM clause")
-
-        tables = from_clause.expressions
+    def _extract_source(self, query: exp.Select) -> ScanNode:
+        tables = list(query.find_all(exp.Table))
         if not tables:
-            raise NormalizationError("FROM clause contains no tables")
-
-        # Only single-table queries for now
-        if len(tables) > 1:
-            raise NotImplementedError(
-                "Multi-table FROM (JOIN) is not yet supported"
-            )
-
-        tbl = tables[0]
-        table_name = tbl.this.name if hasattr(tbl, "this") else tbl.name
+            raise NormalizationError("Query has no FROM clause")
+        table_name = tables[0].name
         return ScanNode(table=table_name)
 
-    def _extract_filter(self, query, source: RelNode) -> RelNode:
-        if query._where is None:
+    def _extract_filter(self, query: exp.Select, source: RelNode) -> RelNode:
+        where_clause = query.find(exp.Where)
+        if where_clause is None:
             return source
-        predicate = self._visit_expr(query._where.this)
+        predicate = self._visit_expr(where_clause.this)
         return FilterNode(source=source, predicate=predicate)
 
-    def _extract_projection(self, query, source: RelNode) -> ProjectNode:
-        select = query._select
-        exprs = select.expressions
+    def _extract_projection(self, query: exp.Select, source: RelNode) -> ProjectNode:
+        exprs = query.args.get("expressions", [])
 
         # SELECT *
         if len(exprs) == 1 and isinstance(exprs[0], sg.Star):
@@ -90,9 +79,8 @@ class Normalizer:
 
         # Literal
         if isinstance(node, sg.Literal):
-            if node.is_string():
+            if node.is_string:
                 return Literal(value=str(node.this))
-            # Numeric
             raw = node.this
             if isinstance(raw, str):
                 try:
@@ -160,6 +148,6 @@ class Normalizer:
             table_qual = table_qual.name
 
         return ColumnRef(
-            table=table_qual or "",   # empty string = unresolved; binder fills it
+            table=table_qual or "",
             column=col_name,
         )

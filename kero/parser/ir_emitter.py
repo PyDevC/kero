@@ -157,8 +157,8 @@ class IREmitter:
         )
         result_name = self._fresh("%projected")
         self._lines.append(
-            f"{result_name} = db.project {source_val}, [{col_args}]"
-            f" : (!db.result) -> !db.result"
+            f"{result_name} = db.project {source_val}"
+            f" : !db.result -> !db.result"
         )
         return Value(result_name, "!db.result")
 
