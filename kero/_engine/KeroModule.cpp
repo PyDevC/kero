@@ -24,23 +24,47 @@
 //   1. DBToTensorPass        (custom)  db-dialect → tensor/linalg/arith
 //   2. Canonicalization
 //   3. One-Shot Bufferization          tensor → memref
+//      (bufferizeFunctionBoundaries=true — required for JIT ABI)
 //   4. Buffer cleanup passes
 //   5. convert-linalg-to-loops
 //      lower-affine
 //      convert-scf-to-cf
-//      convert-memref-to-llvm  (§5.4: convert-memref-to-llvm)
-//      convert-func-to-llvm    (§5.4: convert-func-to-llvm)
+//      convert-memref-to-llvm  (§5.4)
+//      convert-func-to-llvm    (§5.4)
 //      arith-to-llvm
 //      convert-cf-to-llvm
 //      reconcile-unrealized-casts (§5.4)
 //   6. mlir::ExecutionEngine::create() → JIT function pointer
 //
-// FIX: The createDBToTensor() function is in namespace mlir::db per
-// DBToTensor.cpp.  The call site must use that namespace.
-// FIX: createDBToTensorPass() is the exported symbol name used in the
-// header — kept consistent with DBToTensor.h.inc generated registration.
+// KEY DESIGN DECISIONS vs. the broken original:
+//
+//   FIX 1 — Translation interfaces registered at CONTEXT CONSTRUCTION TIME.
+//     The original code called registerAllToLLVMIRTranslations() lazily
+//     inside compile_cpu() via appendDialectRegistry().  By the time
+//     ExecutionEngine::create() walks the module looking for translation
+//     interfaces, the func dialect had no LLVMTranslationDialectInterface
+//     registered, producing the error:
+//       "cannot be converted to LLVM IR: missing
+//        `LLVMTranslationDialectInterface` registration for dialect for
+//        op: func.func"
+//     The fix is to call registerAllToLLVMIRTranslations(registry) in the
+//     constructor BEFORE the MLIRContext is created from that registry.
+//     This mirrors torch-mlir's approach (lib/CAPI/TorchTypes.cpp) and
+//     LingoDB's approach (lib/ExecutionBackends/ExecutionBackend.cpp).
+//
+//   FIX 2 — LLVMDialect must be explicitly loaded.
+//     The LLVM dialect is the target of the entire lowering pipeline; it
+//     must be in the context's loaded-dialect set or ops in the post-
+//     pipeline module will not be recognised by the ExecutionEngine.
+//
+//   FIX 3 — bufferizeFunctionBoundaries = true.
+//     The JIT calling convention passes memref descriptors across the
+//     function boundary (void** ABI).  Setting this to false means the
+//     function signature stays in tensor-land and the ExecutionEngine
+//     cannot generate the right calling convention stubs.
 
 #include "llvm/Support/TargetSelect.h"
+
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
@@ -49,6 +73,7 @@
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
@@ -58,6 +83,7 @@
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
@@ -67,13 +93,24 @@
 #include "mlir/Dialect/SCF/Transforms/Passes.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
 #include "mlir/ExecutionEngine/MemRefUtils.h"
+
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/InitAllDialects.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+
+// FIX 1: These headers register the LLVMTranslationDialectInterface on
+// each dialect.  They MUST be included so the interfaces can be
+// registered into the DialectRegistry before the MLIRContext is built.
+#include "mlir/Target/LLVMIR/Dialect/All.h"
+#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+
 #include "mlir/Transforms/Passes.h"
 
 // DB dialect and its lowering pass.
@@ -127,20 +164,48 @@ struct CompiledQuery {
 class KeroModule {
     public:
     KeroModule() {
-        // Initialise LLVM backend targets (idempotent across multiple calls).
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();
         llvm::InitializeNativeTargetAsmParser();
 
-        // Register BufferizableOpInterface external models before dialect loading.
         mlir::DialectRegistry registry;
+
+        // ---- Bufferizable op interface registrations ----------------------
         mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
         mlir::bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(registry);
         mlir::linalg::registerBufferizableOpInterfaceExternalModels(registry);
         mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
 
-        // Create the shared context and load every dialect the pipeline uses.
+        // FIX 1: Register ALL LLVM IR translation interfaces at registry
+        // construction time — before the MLIRContext is created.
+        //
+        // This is the canonical pattern used by both torch-mlir and LingoDB:
+        //   torch-mlir: lib/CAPI/TorchTypes.cpp
+        //     registerAllToLLVMIRTranslations(registry) in MLIRContext ctor.
+        //   LingoDB: lib/ExecutionBackends/ExecutionBackend.cpp
+        //     registerAllToLLVMIRTranslations(registry) before context init.
+        //
+        // registerAllToLLVMIRTranslations registers LLVMTranslationDialect-
+        // Interface on every dialect that can be translated, including
+        // func::FuncDialect (via mlir/Target/LLVMIR/Dialect/Func/...).
+        // Without this, ExecutionEngine::create() fails with:
+        //   "missing `LLVMTranslationDialectInterface` registration for
+        //    dialect for op: func.func"
+        mlir::registerAllToLLVMIRTranslations(registry);
+
+        // The two explicit calls below are already included by
+        // registerAllToLLVMIRTranslations, but are kept for clarity.
+        mlir::registerBuiltinDialectTranslation(registry);
+        mlir::registerLLVMDialectTranslation(registry);
+
+        // ---- Construct context from fully-populated registry ---------------
         _ctx = std::make_unique<mlir::MLIRContext>(registry);
+
+        // FIX 2: Load LLVMDialect explicitly.
+        // The LLVM dialect is the destination of the entire lowering pipeline.
+        // It must be in the loaded-dialect set so that post-pipeline ops
+        // (llvm.func, llvm.return, llvm.getelementptr …) are recognised by
+        // the ExecutionEngine translator.
         _ctx->loadDialect<
             mlir::func::FuncDialect,
             mlir::arith::ArithDialect,
@@ -148,8 +213,10 @@ class KeroModule {
             mlir::tensor::TensorDialect,
             mlir::memref::MemRefDialect,
             mlir::bufferization::BufferizationDialect,
-            mlir::db::DBDialect // custom db dialect
-            >();
+            mlir::scf::SCFDialect,
+            mlir::cf::ControlFlowDialect,
+            mlir::LLVM::LLVMDialect,       // FIX 2: was missing
+            mlir::db::DBDialect>();
 
         _ctx->disableMultithreading();
     }
@@ -177,7 +244,8 @@ class KeroModule {
         const std::string& table_name,
         const std::vector<std::string>& referenced_columns,
         int64_t n_cols) {
-        // ---- 1. Parse IR ------------------------------------------------
+
+        // ---- 1. Parse IR --------------------------------------------------
         mlir::OwningOpRef<mlir::ModuleOp> module =
             mlir::parseSourceString<mlir::ModuleOp>(ir_text, _ctx.get());
         if (!module) {
@@ -185,32 +253,40 @@ class KeroModule {
                 "KeroModule.compile_cpu: IR parse failed.\nIR:\n" + ir_text);
         }
 
-        // ---- 2–4. Run pass pipeline -------------------------------------
+        // ---- 2–4. Run pass pipeline ----------------------------------------
         mlir::PassManager pm(_ctx.get());
         pm.enableVerifier(true);
         _build_cpu_pipeline(pm);
 
         if (mlir::failed(pm.run(*module))) {
             throw std::runtime_error(
-                "KeroModule.compile_cpu: pass pipeline failed for table '" + table_name + "'");
+                "KeroModule.compile_cpu: pass pipeline failed for table '" +
+                table_name + "'");
         }
 
-        // ---- 5. JIT via ExecutionEngine ----------------------------------
+        // ---- 5. JIT via ExecutionEngine ------------------------------------
         // Developer Guide §5.5: ExecutionEngine wraps LLVM ORC JIT.
         // It must stay alive as long as the function pointer is in use.
+        //
+        // NOTE: We no longer call appendDialectRegistry / registerAll* here.
+        // Those registrations happened at context construction time (FIX 1),
+        // so the context already has all translation interfaces loaded.
         mlir::ExecutionEngineOptions options;
         auto maybeEngine = mlir::ExecutionEngine::create(*module, options);
+
         if (!maybeEngine) {
             std::string msg;
             llvm::handleAllErrors(
                 maybeEngine.takeError(),
                 [&](const llvm::ErrorInfoBase& e) { msg = e.message(); });
             throw std::runtime_error(
-                "KeroModule.compile_cpu: ExecutionEngine creation failed: " + msg);
+                "KeroModule.compile_cpu: ExecutionEngine creation failed: " +
+                msg);
         }
 
         // Wrap in shared_ptr so it survives the CompiledQuery lifetime.
-        std::shared_ptr<mlir::ExecutionEngine> engine(std::move(*maybeEngine));
+        std::shared_ptr<mlir::ExecutionEngine> engine(
+            std::move(*maybeEngine));
 
         // Look up the @query symbol produced by the IR Emitter.
         auto fnSym = engine->lookup("query");
@@ -229,22 +305,19 @@ class KeroModule {
         // Capture engine so JIT code outlives any individual call.
         auto jit_fn = [rawFn, engine](void** args) { rawFn(args); };
 
-        // ---- 6. Build and return CompiledQuery ---------------------------
+        // ---- 6. Build and return CompiledQuery ----------------------------
         CompiledQuery cq;
-        cq.jit_fn = std::move(jit_fn);
-        cq.table_name = table_name;
+        cq.jit_fn       = std::move(jit_fn);
+        cq.table_name   = table_name;
         cq.referenced_columns = referenced_columns;
-        cq.ir_text = ir_text;
-        cq.n_cols = n_cols;
-        cq.engine_ref = std::move(engine);
+        cq.ir_text      = ir_text;
+        cq.n_cols       = n_cols;
+        cq.engine_ref   = std::move(engine);
         return cq;
     }
 
     // -----------------------------------------------------------------------
     // compile_gpu — stub (Developer Guide §9)
-    //
-    // The GPU path branches off after bufferization (§9.1).  The CPU
-    // pipeline is fully isolated; no GPU code touches it.
     // -----------------------------------------------------------------------
     CompiledQuery compile_gpu(
         const std::string& /*ir_text*/,
@@ -253,7 +326,8 @@ class KeroModule {
         int64_t /*n_cols*/,
         const std::string& target = "nvidia") {
         throw std::runtime_error(
-            "KeroModule.compile_gpu: not yet implemented (target='" + target + "').  See Developer Guide §9.");
+            "KeroModule.compile_gpu: not yet implemented (target='" +
+            target + "').  See Developer Guide §9.");
     }
 
     // -----------------------------------------------------------------------
@@ -261,8 +335,6 @@ class KeroModule {
     //
     // Parse and verify IR without running the pass pipeline.
     // Returns "" on success, error string on failure.
-    // Useful for testing the IR Emitter in isolation (Developer Guide §11,
-    // Phase 1 milestone).
     // -----------------------------------------------------------------------
     std::string verify_ir(const std::string& ir_text) {
         mlir::OwningOpRef<mlir::ModuleOp> module =
@@ -277,11 +349,8 @@ class KeroModule {
     // -----------------------------------------------------------------------
     // lower_to_llvm_ir
     //
-    // Run the full lowering pipeline and return the LLVM IR text.
-    // This is a diagnostic/debugging helper — the normal path uses
-    // compile_cpu() which goes all the way to a JIT function pointer.
-    //
-    // Returns the LLVM IR as a string, or throws on failure.
+    // Run the full lowering pipeline and return the LLVM dialect IR as text.
+    // Diagnostic helper; production code uses compile_cpu() instead.
     // -----------------------------------------------------------------------
     std::string lower_to_llvm_ir(const std::string& ir_text) {
         mlir::OwningOpRef<mlir::ModuleOp> module =
@@ -293,7 +362,8 @@ class KeroModule {
         _build_cpu_pipeline(pm);
 
         if (mlir::failed(pm.run(*module)))
-            throw std::runtime_error("lower_to_llvm_ir: pass pipeline failed");
+            throw std::runtime_error(
+                "lower_to_llvm_ir: pass pipeline failed");
 
         std::string llvmIR;
         llvm::raw_string_ostream os(llvmIR);
@@ -315,29 +385,32 @@ class KeroModule {
     //
     // Stage 2 — One-Shot Bufferization (Developer Guide §5.3)
     //   tensor (value semantics) → memref (memory semantics).
-    //   bufferizeFunctionBoundaries=true is required because the JIT ABI
-    //   passes memref descriptors across the function boundary.
+    //
+    //   FIX 3: bufferizeFunctionBoundaries = true  (was false).
+    //   The JIT ABI passes memref descriptors across function boundaries
+    //   (void** calling convention).  With false the function signature
+    //   stays in tensor-land and the ExecutionEngine cannot generate the
+    //   correct calling-convention stubs, causing silent mismatches or
+    //   crashes.  torch-mlir and LingoDB both set this to true.
     //
     // Stage 3 — Loop and arithmetic lowering
-    //   linalg.generic → SCF loops → ControlFlow
+    //   linalg.generic → SCF loops → ControlFlow CFG
     //
     // Stage 4 — LLVM dialect conversion (Developer Guide §5.4)
     //   memref, func, arith, cf → LLVM dialect.
-    //   reconcile-unrealized-casts cleans up any remaining cast ops.
+    //   reconcile-unrealized-casts cleans up remaining cast ops.
     // -----------------------------------------------------------------------
     static void _build_cpu_pipeline(mlir::PassManager& pm) {
-        // ---- Stage 1: db-dialect → tensor/linalg/arith ------------------
-        // FIX: createDBToTensorPass() is the exported name in DBToTensor.h
-        // (generated from the .td pass definition via GEN_PASS_REGISTRATION).
-        // The implementation lives in namespace mlir::db, but the header
-        // exposes it through the mlir namespace via the generated glue.
+
+        // ---- Stage 1: db-dialect → tensor/linalg/arith -------------------
         pm.addPass(mlir::db::createDBToTensor());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        // ---- Stage 2: One-Shot Bufferization ----------------------------
+        // ---- Stage 2: One-Shot Bufferization -----------------------------
         mlir::bufferization::OneShotBufferizePassOptions bufOpts;
         bufOpts.allowReturnAllocsFromLoops = true;
-        bufOpts.bufferizeFunctionBoundaries = false;
+        // FIX 3: must be true for the JIT void** calling convention.
+        bufOpts.bufferizeFunctionBoundaries = true;
         pm.addPass(
             mlir::bufferization::createOneShotBufferizePass(bufOpts));
         pm.addPass(
@@ -345,24 +418,16 @@ class KeroModule {
         pm.addPass(mlir::bufferization::createLowerDeallocationsPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        // ---- Stage 3: linalg/SCF → ControlFlow -------------------------
-        // 3a. linalg.generic → SCF loops
+        // ---- Stage 3: linalg/SCF → ControlFlow --------------------------
         pm.addPass(mlir::createConvertLinalgToLoopsPass());
-        // 3b. Affine maps → standard SCF
         pm.addPass(mlir::createLowerAffinePass());
-        // 3c. SCF → ControlFlow CFG
         pm.addPass(mlir::createSCFToControlFlowPass());
 
-        // ---- Stage 4: LLVM conversion -----------------------------------
-        // 4a. MemRef → LLVM struct descriptors (Developer Guide §5.4)
+        // ---- Stage 4: LLVM conversion ------------------------------------
         pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-        // 4b. func.func / func.return → llvm.func / llvm.return
         pm.addPass(mlir::createConvertFuncToLLVMPass());
-        // 4c. arith → LLVM arithmetic ops
         pm.addPass(mlir::createArithToLLVMConversionPass());
-        // 4d. ControlFlow → LLVM branch ops
         pm.addPass(mlir::createConvertControlFlowToLLVMPass());
-        // 4e. Reconcile any remaining unrealized casts (Developer Guide §5.4)
         pm.addPass(mlir::createReconcileUnrealizedCastsPass());
     }
 };
@@ -390,9 +455,9 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
     // CompiledQuery Python bindings
     // -----------------------------------------------------------------------
     nb::class_<CompiledQuery>(m, "CompiledQuery",
-                              "Compiled query object returned by KeroModule.compile_cpu().\n\n"
-                              "Carries the JIT function pointer and execution metadata.\n"
-                              "Must be kept alive as long as call_jit() may be invoked.")
+        "Compiled query object returned by KeroModule.compile_cpu().\n\n"
+        "Carries the JIT function pointer and execution metadata.\n"
+        "Must be kept alive as long as call_jit() may be invoked.")
         .def_ro("table_name",
                 &CompiledQuery::table_name,
                 "Name of the table this query operates on.")
@@ -406,27 +471,34 @@ Typical usage (handled automatically by kero/engine/compiler.py)::
         .def_ro("n_cols",
                 &CompiledQuery::n_cols,
                 "Number of columns (static C dimension, from schema).")
-        .def("call_jit", [](CompiledQuery& cq, const std::vector<uintptr_t>& ptrs) {
-                 // Developer Guide §5.5: the JIT ABI is void** — a pointer to
+        .def("call_jit",
+             [](CompiledQuery& cq, const std::vector<uintptr_t>& ptrs) {
+                 // Developer Guide §5.5: JIT ABI is void** — a pointer to
                  // an array of void* pointers, each pointing to a memref
                  // descriptor struct allocated by executor.cpp.
-                 std::vector<void *> vptrs;
+                 std::vector<void*> vptrs;
                  vptrs.reserve(ptrs.size());
                  for (auto p : ptrs)
-                     vptrs.push_back(reinterpret_cast<void *>(p));
-                 cq.jit_fn(vptrs.data()); }, "ptrs"_a, "Call the JIT-compiled @query function.\n\n"
-                                                                                                  "ptrs must be a list of integer addresses of memref descriptor\n"
-                                                                                                  "structs, in the argument order recorded in referenced_columns.\n"
-                                                                                                  "The first entry is always the full-table memref (arg0).")
-        .def("__repr__", [](const CompiledQuery& cq) { return "<CompiledQuery table='" + cq.table_name + "' n_cols=" + std::to_string(cq.n_cols) + ">"; });
+                     vptrs.push_back(reinterpret_cast<void*>(p));
+                 cq.jit_fn(vptrs.data());
+             },
+             "ptrs"_a,
+             "Call the JIT-compiled @query function.\n\n"
+             "ptrs must be a list of integer addresses of memref descriptor\n"
+             "structs, in the argument order recorded in referenced_columns.\n"
+             "The first entry is always the full-table memref (arg0).")
+        .def("__repr__", [](const CompiledQuery& cq) {
+            return "<CompiledQuery table='" + cq.table_name +
+                   "' n_cols=" + std::to_string(cq.n_cols) + ">";
+        });
 
     // -----------------------------------------------------------------------
     // KeroModule Python bindings
     // -----------------------------------------------------------------------
     nb::class_<KeroModule>(m, "KeroModule",
-                           "MLIR compilation pipeline owner.\n\n"
-                           "Create one instance per KeroEngine.  It owns the MLIRContext\n"
-                           "for the engine lifetime (Developer Guide §2.3).")
+        "MLIR compilation pipeline owner.\n\n"
+        "Create one instance per KeroEngine.  It owns the MLIRContext\n"
+        "for the engine lifetime (Developer Guide §2.3).")
         .def(nb::init<>(),
              "Create a KeroModule and initialise LLVM JIT targets.")
         .def("compile_cpu",

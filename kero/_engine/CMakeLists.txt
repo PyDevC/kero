@@ -37,6 +37,7 @@ target_link_libraries(_kero
     MLIRFuncToLLVM
     MLIRMemRefToLLVM
     MLIRReconcileUnrealizedCasts
+    MLIRToLLVMIRTranslationRegistration
     MLIRSCFToControlFlow
 
     MLIRIR
