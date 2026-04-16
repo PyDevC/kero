@@ -22,6 +22,10 @@ target_link_libraries(_kero
     MLIRBufferizationTransforms
     MLIRControlFlowDialect
     MLIRFuncDialect
+    MLIRGPUDialect
+    MLIRGPUTransforms
+    MLIRGPUToNVVM
+    MLIRGPUToROCDL
     MLIRLinalgDialect
     MLIRLinalgTransforms
     MLIRMemRefDialect
@@ -39,6 +43,7 @@ target_link_libraries(_kero
     MLIRReconcileUnrealizedCasts
     MLIRToLLVMIRTranslationRegistration
     MLIRSCFToControlFlow
+    MLIRGPUToLLVMIRTranslation
 
     MLIRIR
     MLIRParser
@@ -54,6 +59,7 @@ target_link_libraries(_kero
     LLVMTarget
     LLVMX86CodeGen
     LLVMX86AsmParser
+    LLVMDebugInfoMSF
 )
 
 target_include_directories(_kero PUBLIC ${PROJECT_SOURCE_DIR}/include)
