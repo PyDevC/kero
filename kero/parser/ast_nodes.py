@@ -1,13 +1,12 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
-
-DataType = object  # type alias placeholder
+import pyarrow as pa
 
 @dataclass
 class ColumnRef:
     table: str
     column: str
-    dtype: Optional[object] = field(default=None, compare=False)
+    dtype: Optional[pa.Schema] = field(default=None, compare=False)
 
     def __str__(self) -> str:
         return f"{self.table}.{self.column}"
@@ -16,7 +15,7 @@ class ColumnRef:
 @dataclass
 class Literal:
     value: Union[int, float, str]
-    dtype: Optional[object] = field(default=None, compare=False)
+    dtype: Optional[pa.Schema] = field(default=None, compare=False)
 
     def __str__(self) -> str:
         if isinstance(self.value, str):
@@ -29,7 +28,7 @@ class BinaryExpr:
     op: str
     left: "Expr"
     right: "Expr"
-    dtype: Optional[object] = field(default=None, compare=False)
+    dtype: Optional[pa.Schema] = field(default=None, compare=False)
 
     def __str__(self) -> str:
         return f"({self.left} {self.op} {self.right})"
@@ -41,7 +40,7 @@ Expr = Union[ColumnRef, Literal, BinaryExpr]
 @dataclass
 class ScanNode:
     table: str
-    schema: Optional[object] = field(default=None, compare=False)
+    schema: Optional[pa.Schema] = field(default=None, compare=False)
 
     def __str__(self) -> str:
         return f"SCAN({self.table})"
