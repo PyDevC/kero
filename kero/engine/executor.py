@@ -12,13 +12,21 @@ class Executor:
             data: TableTensor that assocates to a single compiler
         """
         self.data = data
-        self.compiler = KeroCompiler()
-        self.result = None
+        try:
+            self.compiler = KeroCompiler()
+        except RuntimeError:
+            self.compiler = None
 
     def execute(self, kquery: Dict[str, Any]) -> torch.Tensor:
         """Gets the mask from the compiler operations
         maps the output to the columns dict
         """
+        if self.compiler is None:
+            raise RuntimeError(
+                "Executor: the '_kero' C++ extension is not available. "
+                "Build the project with CMake before using the Executor."
+            )
+
         mask = self.compiler.compile(kquery['operations'])
         
         if 'columns' in kquery:
