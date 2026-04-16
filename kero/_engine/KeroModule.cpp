@@ -339,7 +339,7 @@ private:
         // (generated from the .td pass definition via GEN_PASS_REGISTRATION).
         // The implementation lives in namespace mlir::db, but the header
         // exposes it through the mlir namespace via the generated glue.
-        pm.addPass(mlir::db::createDBToTensorPass());
+        pm.addPass(mlir::db::createDBToTensor());
         pm.addPass(mlir::createCanonicalizationPass());
 
         // ---- Stage 2: One-Shot Bufferization ----------------------------
