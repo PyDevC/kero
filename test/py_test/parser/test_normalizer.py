@@ -63,7 +63,12 @@ def test_executor():
     """Test the Executor with tensor operations."""
     print("=== Test: Executor ===")
 
-    table = create_sample_data()
+    table = pa.table({
+        "id": [1, 2, 3, 4, 5],
+        "name": ["alice", "bob", "carol", "dave", "eve"],
+        "age": [25, 30, 35, 40, 45],
+        "salary": [50000.0, 60000.0, 70000.0, 80000.0, 90000.0],
+    })
 
     try:
         executor = Executor(table)
@@ -76,8 +81,8 @@ def test_executor():
         }
         result = executor.execute(kquery)
         print(f"Result: {result}")
-    except Exception as e:
-        print(f"Error: {e}")
+    except RuntimeError as e:
+        print(f"Expected (C++ extension not built): {e}")
     print()
 
 
