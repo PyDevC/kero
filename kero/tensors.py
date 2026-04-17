@@ -66,8 +66,8 @@ class StrTensor(BaseTensor):
         
 
 
-class ScalerTensor:
-    """Scaler Tensors are 0-D tensors that represents the constants in the
+class ScalarTensor:
+    """Scalar Tensors are 0-D tensors that represents the constants in the
     Relational database.
     Strict type checking of dimension of Scaler Tensor
     """
@@ -93,8 +93,21 @@ class DateTensor(BaseTensor):
         super().__init__(tensor, name)
 
 
-    def _date_to_ordinal(self, date):
-        return date # need work here
+    def _date_to_ordinal(self, date_str: str):
+        import datetime
+        formats = [
+            "%Y-%m-%d",
+            "%d/%m/%Y",
+            "%m/%d/%Y",
+            "%Y/%m/%d",
+        ]
+        for fmt in formats:
+            try:
+                dt = datetime.datetime.strptime(date_str, fmt)
+                return dt.toordinal()
+            except ValueError:
+                continue
+        raise ValueError(f"Unable to parse date: {date_str}. Expected format: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, or YYYY/MM/DD")
 
 
 class TableTensor: 
@@ -123,7 +136,19 @@ class TableTensor:
 
 
     def _validate_dtype(self):
-        pass # first we need to get dtypes form the columns Then validate the types
+        dtype_requirements = {
+            "NumTensor": [torch.float32, torch.float64, torch.int32, torch.int64],
+            "StrTensor": [torch.uint8],
+            "DateTensor": [torch.int32, torch.int64],
+        }
+        for name, tensor in self.columns.items():
+            tensor_type = type(tensor).__name__
+            if tensor_type in dtype_requirements:
+                if tensor.tensor.dtype not in dtype_requirements[tensor_type]:
+                    raise TypeError(
+                        f"Column '{name}' ({tensor_type}) has dtype {tensor.tensor.dtype}, "
+                        f"expected one of {dtype_requirements[tensor_type]}"
+                    )
 
 
     def _validate_shape(self):

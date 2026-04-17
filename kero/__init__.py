@@ -1,7 +1,7 @@
 from .tensors import (
     DateTensor,
     NumTensor,
-    ScalerTensor,
+    ScalarTensor,
     StrTensor,
     TableTensor
 )
@@ -11,7 +11,7 @@ import kero.engine as engine
 __all__ = [
     "DateTensor",
     "NumTensor",
-    "ScalerTensor",
+    "ScalarTensor",
     "StrTensor",
     "TableTensor",
     "engine",

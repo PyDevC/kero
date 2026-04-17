@@ -1,4 +1,14 @@
-*__pycache__*/
-docs/build/*
-kero.egg-info/*
-dist/*
+## Python ignores
+__pycache__/
+docs/build/
+*.egg-info/
+dist/
+
+
+## MLIR ignores
+build/
+.cache/
+
+## Lit ignores
+test/**/Output/
+test/.lit_*
