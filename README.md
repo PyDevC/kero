@@ -1,5 +1,7 @@
 # Kero-Sine
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/PyDevC/kero)
+
 Kero-Sine: GPU Accelerated SQL Query Engine
 
 KeroSine is MLIR-based SQL Compiler for Deep Learning Libraries such as PyTorch.
