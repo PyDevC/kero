@@ -17,7 +17,7 @@ except ImportError:
 
 class Parser:
     def __init__(self, per_query: bool = False):
-        self.registry = SchemaRegistry(per_query=per_query)
+        self.registry = SchemaRegistry(per_query)
         self._normalizer = Normalizer()
         self._module: Optional[Module] = None   # injected by Compiler
 
@@ -46,6 +46,6 @@ class Parser:
         typed_ast = binder.bind(internal_ast)
         emitter = IREmitter()
         meta = emitter.emit(typed_ast, self._module)
-        self.registry.on_parse_complete()
+        self.registry.on_parse_hook()
 
         return meta

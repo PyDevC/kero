@@ -1,44 +1,41 @@
 import torch
-from kero import TableTensor, StrTensor
-from kero.engine import KeroCompiler
+import ctypes
+import pyarrow as pa
+from kero._arrow_bridge import ArrowTableTensorFormat
 from typing import Dict, List, Any
 
 class Executor:
-    """Utilizes KeroCompiler to perform operations and get results from
-    Compiler, maps the results with respective columns selected in the query
-    """
-    def __init__(self, data: TableTensor):
-        """Parameters:
-            data: TableTensor that assocates to a single compiler
-        """
-        self.data = data
-        self.compiler = KeroCompiler(data)
+    def __init__(self, table: pa.Table):
+        self.table = table
+        self.bridge = ArrowTableTensorFormat()
         self.result = None
 
-    def execute(self, kquery: Dict[str, Any]) -> torch.Tensor:
-        """Gets the mask from the compiler operations
-        maps the output to the columns dict
-        """
-        mask = self.compiler.compile(kquery['operations'])
-        print(mask)
+    def execute(self, compiled_query: Any) -> Dict[str, Any]:
+        num_rows = len(self.table)
         
-        if 'columns' in kquery:
-            selected_columns = kquery['columns']
-            cols = self._select_columns(mask, selected_columns)
-            select_data = {}
-            for c in cols.items():
-                if isinstance(c[1], StrTensor):
-                    c[1].tensor = c[1].tensor[mask]
-                    select_data[c[0]] = [tensor_to_string(row) for row in c[1].tensor]
-                else:
-                    select_data[c[0]] = torch.masked_select(c[1].tensor, mask)
-            self.result = select_data
+        # 1. Maintain object persistence to prevent pointer invalidation
+        descriptors = []
+        addresses = []
+
+        # 2. Add Table Descriptor (Arg 0)
+        # Note: In MLIR db-dialect, Arg 0 is the table itself converted to a tensor
+        table_tensor = self.bridge.arrow_to_tensor(self.table, compiled_query.referenced_columns[0], [num_rows, compiled_query.n_cols])
+        table_desc = self.bridge.tensor_to_memref(table_tensor)
+        descriptors.append(table_desc)
+        addresses.append(ctypes.addressof(table_desc))
+
+        # 3. Add Column Descriptors (Args 1..N)
+        for col_name in compiled_query.referenced_columns:
+            tensor_ptr = self.bridge.arrow_to_tensor(self.table, col_name, [num_rows, 1])
+            if tensor_ptr is None:
+                raise RuntimeError(f"Column {col_name} resolution failed")
+            
+            col_desc = self.bridge.tensor_to_memref(tensor_ptr)
+            descriptors.append(col_desc)
+            addresses.append(ctypes.addressof(col_desc))
+
+        # 4. Invoke JIT
+        # The list 'descriptors' keeps the C-structs alive in memory during this call
+        compiled_query.call_jit(addresses)
         
-        return self.result
-
-    def _select_columns(self, mask: torch.BoolTensor, columns: List[str]) -> torch.Tensor:
-        temp = {key: self.data.columns[key] for key in columns}
-        return temp
-
-def tensor_to_string(tensor):
-    return ''.join([chr(x.item()) for x in tensor if x.item() != 0])
+        return {"status": "success", "table": compiled_query.table_name}

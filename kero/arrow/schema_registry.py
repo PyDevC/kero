@@ -4,9 +4,9 @@ from typing import Dict
 
 
 class SchemaRegistry:
-    def __init__(self, multiple_query: bool):
+    def __init__(self, per_query: bool):
         self.schemas: Dict[str, pa.Schema] = {}
-        self.multiple_query = multiple_query
+        self.multiple_query = per_query
 
     def register(self, table_name: str, table: pa.Schema):
         self.schemas[table_name] = table
