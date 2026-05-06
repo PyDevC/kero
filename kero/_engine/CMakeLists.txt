@@ -33,6 +33,7 @@ target_link_libraries(_kero
     MLIRNVVMDialect
     MLIRNVVMToLLVMIRTranslation
     MLIRGPUToNVVMTransforms
+    MLIRTensorToLinalg
     MLIRSCFDialect
     MLIRSCFTransforms
     MLIRTensorDialect

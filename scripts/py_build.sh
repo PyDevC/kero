@@ -9,4 +9,4 @@ fi
 
 export MLIR_DIR="$THIRDPARTY_LLVM_DIR/build/lib/cmake/mlir"
 export LLVM_DIR="$THIRDPARTY_LLVM_DIR/build/lib/cmake/llvm"
-pip install . -v
+pip install . -v --config-settings=cmake.build-type=Debug

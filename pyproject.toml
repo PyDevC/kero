@@ -35,5 +35,5 @@ cmake.args = [
     "-DLLVM_DIR=${LLVM_DIR}"
 ]
 
-wheel.install-dir = ""
+wheel.install-dir = "."
 wheel.packages = ["kero"]

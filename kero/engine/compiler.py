@@ -7,9 +7,10 @@ import pyarrow as pa
 from kero._mlir import Module
 
 try:
-    from kero import _kero
-except ImportError:
-    raise Exception("Check if the library was built with CMake or not. C++ modules missing.")
+    import kero
+    print(dir(kero))
+except ImportError as e:
+    raise Exception(f"Check if the library was built with CMake or not. C++ modules missing. {e}")
 
 
 @dataclass

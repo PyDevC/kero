@@ -3,7 +3,7 @@ import torch
 from kero.engine.parser import Parser
 from kero.engine.compiler import Compiler
 
-def run_kero_end_to_end():
+def test_run_kero_end_to_end():
     # 1. Dataset Generation: Create synthetic Apache Arrow data
     data = {
         "user_id": [101, 102, 103, 104, 105],
@@ -32,6 +32,3 @@ def run_kero_end_to_end():
 
     print("\n--- Lowered LLVM Dialect IR ---")
     print(compiler.lower_to_llvm_ir())
-
-if __name__ == "__main__":
-    run_kero_end_to_end()

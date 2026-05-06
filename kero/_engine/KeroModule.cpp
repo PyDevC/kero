@@ -12,6 +12,7 @@
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Conversion/TensorToLinalg/TensorToLinalgPass.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
@@ -267,8 +268,7 @@ class KeroModule {
         _build_cpu_pipeline(pm);
 
         if (mlir::failed(pm.run(*module)))
-            throw std::runtime_error(
-                "lower_to_llvm_ir: pass pipeline failed");
+            throw std::runtime_error("lower_to_llvm_ir: pass pipeline failed");
 
         std::string llvmIR;
         llvm::raw_string_ostream os(llvmIR);
@@ -283,16 +283,7 @@ class KeroModule {
         pm.addPass(mlir::db::createDBToTensor());
         pm.addPass(mlir::createCanonicalizerPass());
 
-        mlir::bufferization::OneShotBufferizePassOptions bufOpts;
-        bufOpts.allowReturnAllocsFromLoops = true;
-        bufOpts.bufferizeFunctionBoundaries = true;
-        pm.addPass(
-            mlir::bufferization::createOneShotBufferizePass(bufOpts));
-        pm.addPass(
-            mlir::bufferization::createDropEquivalentBufferResultsPass());
-        pm.addPass(mlir::bufferization::createLowerDeallocationsPass());
-        pm.addPass(mlir::createCanonicalizerPass());
-
+        pm.addPass(mlir::createConvertTensorToLinalgPass());
         pm.addPass(mlir::createConvertLinalgToLoopsPass());
         pm.addPass(mlir::createLowerAffinePass());
         pm.addPass(mlir::createSCFToControlFlowPass());
