@@ -27,8 +27,8 @@ def DBTable : DB_Dialect_Type<"Table", "table"> {
         DB Table type is used with from clause for pulling data from the table.
     }];
 
-    let parameters = (ins StringRefParameter<"table name">:$table_name);
-    let assemblyFormat = "`<` $table_name `>`";
+    let parameters = (ins StringRefParameter<"table name">:$table_name, "int64_t":$nrows, "int64_t":$ncols);
+    let assemblyFormat = "`<` $table_name `,` $ncols `,` $nrows `>`";
 }
 
 def DBColumn : DB_Dialect_Type<"Column", "column"> {
@@ -37,8 +37,8 @@ def DBColumn : DB_Dialect_Type<"Column", "column"> {
         DB Column type has three parts to it, one is table it's part of, second is name of the column, and third is data type of the column.
     }];
 
-    let parameters = (ins StringRefParameter<"table name">:$table_name, StringRefParameter<"column name">:$column_name, TypeParameter<"::mlir::Type", "AnyType">:$dtype);
-    let assemblyFormat = "`<` $table_name `,` $column_name `,` $dtype `>`";
+    let parameters = (ins StringRefParameter<"table name">:$table_name, StringRefParameter<"column name">:$column_name, TypeParameter<"::mlir::Type", "AnyType">:$dtype, "int64_t":$nrows);
+    let assemblyFormat = "`<` $table_name `,` $column_name `,` $dtype `,` $nrows `>`";
 }
 
 def DBRow : DB_Dialect_Type<"Row", "row"> {

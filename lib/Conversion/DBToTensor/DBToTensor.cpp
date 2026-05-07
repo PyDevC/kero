@@ -30,25 +30,30 @@ class DBToTensorTypeConverter : public TypeConverter {
         addConversion([](Type type) { return type; });
 
         // !db.result → tensor<?x?xf32>
-        addConversion([&](db::ResultType) -> Type {
-            return RankedTensorType::get({ShapedType::kDynamic, ShapedType::kDynamic},
+        addConversion([context](db::ResultType) -> Type {
+            return RankedTensorType::get({100, 1000},
                                          Float32Type::get(context));
         });
 
-        // !db.table<"t"> → tensor<?x?xf32>
-        addConversion([&](db::TableType) -> Type {
-            return RankedTensorType::get({ShapedType::kDynamic, ShapedType::kDynamic},
+        /// !db.table<"t", c, r> -> tensor<cxrxf32>
+        addConversion([context](db::TableType type) -> Type {
+            int64_t ncols = type.getNcols();
+            int64_t nrows = type.getNrows();
+
+            SmallVector<int64_t> shape = {ncols, nrows};
+            return RankedTensorType::get({ncols, nrows},
                                          Float32Type::get(context));
         });
 
-        // !db.column<"t","c",T> → tensor<1x?xT>
-        addConversion([&](db::ColumnType colType) -> Type {
-            return RankedTensorType::get({1, ShapedType::kDynamic},
+        // !db.column<"t","c",T, r> → tensor<1xrxT>
+        addConversion([](db::ColumnType colType) -> Type {
+            int64_t nrows = colType.getNrows();
+            return RankedTensorType::get({1, nrows},
                                          colType.getDtype());
         });
 
         // !db.row → index
-        addConversion([&](db::RowType) -> Type {
+        addConversion([context](db::RowType) -> Type {
             return IndexType::get(context);
         });
     }
@@ -75,7 +80,6 @@ class ConvertDBReturn : public OpConversionPattern<ReturnOp> {
         return success();
     }
 };
-
 
 class ConvertDBFilter : public OpConversionPattern<FilterOp> {
     public:
@@ -171,7 +175,7 @@ class ConvertDBFilter : public OpConversionPattern<FilterOp> {
         for (int64_t i = 0; i < static_cast<int64_t>(shape.size()); ++i) {
             if (shape[i] == ShapedType::kDynamic) {
                 Value dim = tensor::DimOp::create(builder, loc, referenceSource,
-                                                          builder.create<arith::ConstantIndexOp>(loc, i));
+                                                  builder.create<arith::ConstantIndexOp>(loc, i));
                 dynSizes.push_back(dim);
             }
         }
