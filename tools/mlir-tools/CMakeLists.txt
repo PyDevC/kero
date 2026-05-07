@@ -6,6 +6,7 @@ set(LIBS
     ${conversion_libs}
     MLIRIR
 
+    MLIRRegisterAllDialects
     MLIRArithDialect
     MLIRFuncDialect
     MLIRMemRefDialect
@@ -15,6 +16,7 @@ set(LIBS
     MLIROptLib
     MLIRPass
     MLIRTransforms
+    MLIRRegisterAllPasses
 )
 
 add_llvm_executable(kero-opt kero-opt.cpp)
