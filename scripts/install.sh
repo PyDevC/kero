@@ -9,4 +9,13 @@ fi
 
 export MLIR_DIR="$THIRDPARTY_LLVM_DIR/build/lib/cmake/mlir"
 export LLVM_DIR="$THIRDPARTY_LLVM_DIR/build/lib/cmake/llvm"
-pip install . -v
+
+if [[ $# -gt 0 ]]; then 
+    if [[ $1 == "install" ]]; then
+        pip install . -v
+    elif [[ $1 == "wheel" ]]; then
+        python3 -m build --wheel
+    fi
+else
+    pip install . -v
+fi
