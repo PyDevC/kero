@@ -1,7 +1,7 @@
 #ifndef DIALECT_DB_IR_DBOPS_TD_
 #define DIALECT_DB_IR_DBOPS_TD_
 
-include "DB.td"
+include "Dialect/DB/IR/DB.td"
 include "mlir/IR/OpBase.td"
 include "mlir/IR/AttrTypeBase.td"
 

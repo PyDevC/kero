@@ -9,81 +9,33 @@ find_package(nanobind CONFIG REQUIRED)
 
 set(BUILD_SHARED_LIBS OFF)
 
-nanobind_add_module(_kero KeroModule.cpp)
+nanobind_add_module(_keroEngine KeroModule.cpp ArrowBridge.cpp)
 
-target_link_libraries(_kero
-    PRIVATE
-    DB
-    DBToTensorPass
+set(KERO_MLIR_PYTHON_ROOT_DIR "${CMAKE_SOURCE_DIR}/kero")
 
-    MLIRArithDialect
-    MLIRArithTransforms
-    MLIRBufferizationDialect
-    MLIRBufferizationTransforms
-    MLIRControlFlowDialect
-    MLIRFuncDialect
-    MLIRGPUDialect
-    MLIRGPUTransforms
+declare_mlir_python_sources(KeroEngineMLIRPythonSources)
 
-    MLIRLinalgDialect
-    MLIRLinalgTransforms
-    MLIRMemRefDialect
-    MLIRMemRefTransforms
-
-    MLIRNVVMDialect
-    MLIRNVVMToLLVMIRTranslation
-    MLIRGPUToNVVMTransforms
-    MLIRTensorToLinalg
-    MLIRSCFDialect
-    MLIRSCFTransforms
-    MLIRTensorDialect
-
-    MLIRAffineToStandard
-    MLIRArithToLLVM
-    MLIRControlFlowToLLVM
-    MLIRConvertToLLVMPass
-    MLIRFuncToLLVM
-    MLIRMemRefToLLVM
-    MLIRReconcileUnrealizedCasts
-    
-    MLIRBuiltinToLLVMIRTranslation
-    MLIRLLVMToLLVMIRTranslation
-    MLIRToLLVMIRTranslationRegistration
-    MLIRSCFToControlFlow
-    MLIRGPUToLLVMIRTranslation
-
-   
-    MLIRLLVMDialect
-    MLIRIR
-    MLIRParser
-    MLIRPass
-    MLIRSupport
-    MLIRTransforms
-
-    MLIRExecutionEngine
-    MLIRMemRefUtils
-
-    LLVMCore
-    LLVMSupport
-    LLVMTarget
-    LLVMX86CodeGen
-    LLVMX86AsmParser
-    LLVMDebugInfoMSF
+declare_mlir_python_sources(KeroEngineMLIRPython.Dialects
+    ROOT_DIR "${KERO_MLIR_PYTHON_ROOT_DIR}/_engine"
+    ADD_TO_PARENT KeroEngineMLIRPythonSources
 )
 
-target_include_directories(_kero PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_compile_features(_kero PUBLIC cxx_std_17)
-install(TARGETS _kero LIBRARY DESTINATION kero)
+declare_mlir_dialect_python_bindings(
+    ADD_TO_PARENT KeroEngineMLIRPython.Dialects
+    ROOT_DIR "${KERO_MLIR_PYTHON_ROOT_DIR}/_engine"
+    TD_FILE _kero/dialects/KeroBinds.td
+    SOURCES _kero/dialects/db/__init__.py
+    DIALECT_NAME db
+)
 
 find_package(Arrow REQUIRED)
 
-nanobind_add_module(_arrow_bridge ArrowBridge.cpp)
-
-target_link_libraries(_arrow_bridge
+target_link_libraries(_keroEngine
     PRIVATE
     Arrow::arrow_shared
+    KeroCAPI
 )
 
-target_include_directories(_arrow_bridge PRIVATE ${PROJECT_SOURCE_DIR}/include)
-target_compile_features(_arrow_bridge PUBLIC cxx_std_17)
-install(TARGETS _arrow_bridge DESTINATION kero)
+target_include_directories(_keroEngine PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_compile_features(_keroEngine PUBLIC cxx_std_17)
+install(TARGETS _keroEngine LIBRARY DESTINATION ${PROJECT_SOURCE_DIR}/kero)
