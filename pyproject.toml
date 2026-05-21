@@ -1,48 +1,7 @@
 [build-system]
-requires = ["scikit-build-core>=0.9", "nanobind>=2.0", "setuptools>=61.0", "wheel"]
-build-backend = "scikit_build_core.build"
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[project]
-name = "kero"
-version = "0.1.0"
-description = "GPU Accelerated DataBase Query Engine"
-readme = "README.md"
-requires-python = ">=3.9"
-authors = [
-    { name = "PyDevC", email = "pydevc@proton.me" }
-]
-
-dependencies = [
-    "numpy",
-    "pandas",
-    "pyarrow",
-    "sqlglot",
-    "sqlparse",
-]
-
-[project.optional-dependencies]
-cuda  = ["torch>=2.5.0"]
-rocm  = ["torch>=2.5.0"]
-torch = ["torch>=2.5.0"]
-
-[tool.scikit-build]
-cmake.version = ">=3.20"
-cmake.build-type = "Release"
-build-dir = "build"
-metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
-
-cmake.args = [
-    "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
-    "-DMLIR_ENABLE_BINDINGS_PYTHON=ON",
-    "-DMLIR_BINDINGS_PYTHON_NB_DOMAIN=_keroEngine",
-    "-DTHIRDPARTY_LLVM_DIR=${THIRDPARTY_LLVM_DIR}",
-    "-DMLIR_DIR=${MLIR_DIR}",
-    "-DLLVM_DIR=${LLVM_DIR}"
-]
-
-wheel.install-dir = "build"
-wheel.packages = ["kero"]
-
-[[tool.scikit-build.overrides]]
-if.state = "editable"
-cmake.build-type = "Debug"
+[tool.black]
+line-length = 88
+target-version = ['py38']
