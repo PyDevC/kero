@@ -110,7 +110,8 @@ class ConvertDBFilter : public OpConversionPattern<FilterOp> {
         SmallVector<utils::IteratorType> iterators(
             tensorType.getRank(), utils::IteratorType::parallel);
 
-        auto selectOp = rewriter.create<linalg::GenericOp>(
+        auto selectOp = linalg::GenericOp::create(
+            rewriter,
             loc, tensorType,
             /*inputs=*/ValueRange{inputTensor, mask},
             /*outputs=*/ValueRange{zeroFilled},
@@ -142,14 +143,15 @@ class ConvertDBFilter : public OpConversionPattern<FilterOp> {
         SmallVector<utils::IteratorType> iterators(
             tensorType.getRank(), utils::IteratorType::parallel);
 
-        auto maskOp = rewriter.create<linalg::GenericOp>(
+        auto maskOp = linalg::GenericOp::create(
+            rewriter,
             loc, maskType,
             /*inputs=*/ValueRange{inputTensor},
             /*outputs=*/ValueRange{initMask},
             maps, iterators,
             [&](OpBuilder& nestedBuilder, Location nestedLoc, ValueRange /*args*/) {
                 Value rowIV =
-                    nestedBuilder.create<linalg::IndexOp>(nestedLoc, 1);
+                    linalg::IndexOp::create(nestedBuilder, nestedLoc, 1);
 
                 IRMapping mapper;
                 mapper.map(filterRegion.getArgument(0), rowIV);
@@ -160,7 +162,7 @@ class ConvertDBFilter : public OpConversionPattern<FilterOp> {
                 auto returnOp =
                     cast<db::ReturnOp>(filterRegion.front().getTerminator());
                 Value result = mapper.lookupOrDefault(returnOp.getInput());
-                nestedBuilder.create<linalg::YieldOp>(nestedLoc, result);
+                linalg::YieldOp::create(nestedBuilder, nestedLoc, result);
             });
 
         return maskOp.getResult(0);
@@ -175,7 +177,7 @@ class ConvertDBFilter : public OpConversionPattern<FilterOp> {
         for (int64_t i = 0; i < static_cast<int64_t>(shape.size()); ++i) {
             if (shape[i] == ShapedType::kDynamic) {
                 Value dim = tensor::DimOp::create(builder, loc, referenceSource,
-                                                  builder.create<arith::ConstantIndexOp>(loc, i));
+                                                  arith::ConstantIndexOp::create(builder, loc, i));
                 dynSizes.push_back(dim);
             }
         }
