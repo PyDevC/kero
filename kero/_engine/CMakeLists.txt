@@ -49,6 +49,7 @@ declare_mlir_dialect_python_bindings(
 declare_mlir_python_extension(KeroEngineMLIRPythonExtensions.Main
     MODULE_NAME _keroEngine
     ADD_TO_PARENT KeroEngineMLIRPythonExtensions
+    PYTHON_BINDINGS_LIBRARY nanobind
     SOURCES KeroModule.cpp
     EMBED_CAPI_LINK_LIBS
         KeroCAPI ## add_mlir_public_c_api_library in lib/CAPI/
@@ -61,6 +62,8 @@ declare_mlir_python_extension(KeroEngineMLIRPythonExtensions.Main
 ################################################################################
 
 set(_source_components
+    MLIRPythonExtension.RegisterEverything
+    MLIRPythonSources.Core
     KeroEngineMLIRPythonSources
     KeroEngineMLIRPythonExtensions
 )

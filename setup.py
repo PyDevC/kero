@@ -81,27 +81,36 @@ def prepare_installation():
         shutil.rmtree(CMAKE_INSTALL_DIR_ABS)
     os.makedirs(CMAKE_INSTALL_DIR_ABS, exist_ok=True)
 
-    # Copy pure python codebase
     source_package_src = os.path.join(SETUPPY_DIR, "kero")
     source_package_dst = os.path.join(CMAKE_INSTALL_DIR_ABS, "kero")
+    
     if os.path.exists(source_package_src):
         for root, dirs, files in os.walk(source_package_src):
+            # Prune __pycache__ directories from the walk tree
+            if "__pycache__" in dirs:
+                dirs.remove("__pycache__")
+                
             rel_path = os.path.relpath(root, source_package_src)
             target_subdir = source_package_dst if rel_path == "." else os.path.join(source_package_dst, rel_path)
             os.makedirs(target_subdir, exist_ok=True)
             for file in files:
+                # Enforce exact match for source python files
                 if file.endswith(".py"):
                     shutil.copy2(os.path.join(root, file), os.path.join(target_subdir, file))
 
-    # Overlay generated binaries and modules from CMake build
     generated_package_src = os.path.join(KERO_BUILD_DIR, "python_packages", "kero")
     if os.path.exists(generated_package_src):
         for root, dirs, files in os.walk(generated_package_src):
+            # Prune __pycache__ directories from the walk tree
+            if "__pycache__" in dirs:
+                dirs.remove("__pycache__")
+                
             rel_path = os.path.relpath(root, generated_package_src)
             target_subdir = source_package_dst if rel_path == "." else os.path.join(source_package_dst, rel_path)
             os.makedirs(target_subdir, exist_ok=True)
             for file in files:
-                if file.endswith((".py", ".so", ".pyd", ".dylib")):
+                # Structural fix: split file extension checks to prevent tracking .pyc files
+                if file.endswith(".py") or file.endswith((".so", ".pyd", ".dylib")):
                     s_file = os.path.join(root, file)
                     d_file = os.path.join(target_subdir, file)
                     if os.path.exists(d_file):
@@ -111,7 +120,6 @@ def prepare_installation():
 
 prepare_installation()
 
-# Scan the completed staging ground to discover submodules like kero.arrow, kero._engine._kero._mlir_libs
 discovered_packages = find_namespace_packages(where=CMAKE_INSTALL_DIR_ABS)
 
 class CMakeBuildPy(_build_py):
