@@ -3,6 +3,7 @@ __pycache__/
 docs/build/
 *.egg-info/
 dist/
+setup_build/
 
 
 ## MLIR ignores
