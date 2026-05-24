@@ -62,8 +62,9 @@ declare_mlir_python_extension(KeroEngineMLIRPythonExtensions.Main
 ################################################################################
 
 set(_source_components
+    MLIRPythonSources
     MLIRPythonExtension.RegisterEverything
-    MLIRPythonSources.Core
+    MLIRPythonExtension.Core
     KeroEngineMLIRPythonSources
     KeroEngineMLIRPythonExtensions
 )
