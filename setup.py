@@ -1,3 +1,30 @@
+#################################################################################
+# Script for generating the kero wheel.
+# ```
+# $ python setup.py bdist_wheel
+# ```
+# Environment variables:
+#
+#   THIRDPARTY_LLVM_DIR:
+#       Path to the llvm-project
+#
+#   LLVM_INSTALL_DIR:
+#       Path to the install directory for llvm-project
+#
+#   KERO_BUILD_DIR:
+#        Path to kero build directory
+#
+#   CMAKE_BUILD_TYPE:
+#       Release or Debug or other types
+#
+#   BUILD_SYSTEM:
+#       Which build system to use Default is Ninja
+#
+#   MAX_JOBS:
+#       No. of cores to use
+#
+#################################################################################
+
 import os
 import sys
 import shutil
@@ -17,6 +44,7 @@ THIRDPARTY_LLVM_DIR = os.getenv("THIRDPARTY_LLVM_DIR", None)
 LLVM_INSTALL_DIR = os.getenv("LLVM_INSTALL_DIR", None)
 KERO_BUILD_DIR = os.getenv("KERO_BUILD_DIR", os.path.join(SETUPPY_DIR, "build"))
 CMAKE_BUILD_TYPE = os.getenv("CMAKE_BUILD_TYPE", "Release")
+BUILD_SYSTEM = os.getenv("BUILD_SYSTEM", "Ninja")
 MAX_JOBS = os.getenv("MAX_JOBS", str(multiprocessing.cpu_count()))
 
 CMAKE_INSTALL_DIR_REL = os.path.join("build", "setup_install")
@@ -31,6 +59,7 @@ def prepare_installation():
 
     cmake_config_args = [
         "cmake",
+        f"-G {BUILD_SYSTEM}",
         f"-DCMAKE_BUILD_TYPE={CMAKE_BUILD_TYPE}",
         f"-DPython3_EXECUTABLE={sys.executable}",
         "-DPython3_FIND_VIRTUALENV=ONLY",
