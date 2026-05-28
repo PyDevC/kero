@@ -20,7 +20,7 @@ set(CMAKE_PLATFORM_NO_VERSIONED_SONAME ON)
 set(KERO_MLIR_PYTHON_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_kero")
 
 ## Add the _kero in kero/__init__.py
-add_compile_definitions("MLIR_PYTHON_PACKAGE_PREFIX=_kero.")
+add_compile_definitions("MLIR_PYTHON_PACKAGE_PREFIX=kero._engine._kero.")
 
 ################################################################################
 # SOURCES
