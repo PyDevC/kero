@@ -1,3 +1,3 @@
-from .schema_registry import SchemaRegistry
+from . import exec, data
 
-__all__ = ["SchemaRegistry"]
+__all__ = ["exec", "data"]
