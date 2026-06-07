@@ -1,6 +1,5 @@
 #include "mlir/CAPI/Registration.h"
 #include "kero-c/Registration.h"
-#include "Conversion/DBToTensor/DBToTensor.h"
 #include "Dialect/DB/IR/DBDialect.h"
 #include "mlir/CAPI/IR.h"
 #include "mlir/Conversion/Passes.h"
@@ -19,5 +18,4 @@ void KeroRegisterAllDialects(MlirContext context) {
 }
 void KeroRegisterAllPasses() {
     mlir::registerAllPasses();
-    mlir::db::registerDBToTensorPasses();
 }

@@ -14,5 +14,4 @@ add_mlir_public_c_api_library(KeroCAPI
     MLIRRegisterAllPasses
     MLIRSupport
     DB
-    DBToTensorPass
 )
