@@ -4,7 +4,7 @@
 ![Status](https://img.shields.io/badge/status-pre--release-orange)
 
 Kero-Sine is a SQL Query Engine build using MLIR and PyTorch, that has capability to run and optimize queries on CPU and GPU.
-It uses `SQLGlot` as it's user parser which can handle different kinds of queries from different `dialects`. We use Apache Arrow to interact with existing databases and apply ETL on them, utlizing `Arrow Column Format`.
+It uses `SQLGlot` as it's user parser which can handle different kinds of queries from different `dialects`. We use Apache Arrow to interact with existing databases and apply ETL on them, utilizing `Arrow Column Format`.
 It provides custom Python wrappers around PyTorch `torch.Tensor` to act as Table, Column, Date Entry, etc which can be used as result types.
 
 > **Note:** Dependencies, full API documentation, and additional docs will be updated at the first release.
