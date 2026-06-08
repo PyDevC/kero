@@ -26,4 +26,17 @@ def DB_ScanOp : DB_Op<"scan"> {
     let assemblyFormat = "attr-dict $table `:` type($table) `->` type($output)";
 }
 
+def DB_OutputOp : DB_Op<"output"> {
+    let summary = "It selects some the columns from table type to output";
+
+    let arguments = (ins
+        DBTable:$table,
+        StrArrayAttr:$select
+    );
+
+    let results = (outs DBTable:$output);
+
+    let assemblyFormat = "attr-dict $table `:` type($table) `->` type($output)";
+}
+
 #endif // DIALECT_DB_IR_DBOPS_TD_
