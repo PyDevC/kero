@@ -37,6 +37,8 @@ def DB_OutputOp : DB_Op<"output"> {
     let results = (outs DBTable:$output);
 
     let assemblyFormat = "attr-dict $table `:` type($table) `->` type($output)";
+
+    let hasVerifier = 1;
 }
 
 #endif // DIALECT_DB_IR_DBOPS_TD_
