@@ -43,7 +43,7 @@ def ColumnAttr : AttrDef<DB_Dialect, "Column"> {
     let parameters = (ins 
         "::mlir::StringAttr":$name, 
         "::mlir::Type":$type, 
-        "::mlir::IntegerType":$nrows
+        "int64_t":$nrows
     );
 
     let assemblyFormat = "`<` $name `,` $type `,` $nrows `>`";
@@ -70,6 +70,8 @@ def DBTable : DB_Dialect_Type<"Table", "table"> {
     );
 
     let assemblyFormat = "`<` $ncols `,` $nrows `:` `[` $columns `]` `>`";
+
+    let genVerifyDecl = 1;
 }
 
 #endif // DB_DIALECT_TD_

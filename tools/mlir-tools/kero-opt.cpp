@@ -1,4 +1,3 @@
-#include "Conversion/DBToTensor/DBToTensor.h"
 #include "Dialect/DB/IR/DBDialect.h"
 
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
@@ -16,8 +15,6 @@ int main(int argc, char** argv) {
     mlir::registerAllPasses();
     mlir::registerConvertToLLVMDependentDialectLoading(registry);
     
-    mlir::db::registerDBToTensorPasses();
-
     return mlir::asMainReturnCode(
         mlir::MlirOptMain(argc, argv, "Kero-binary", registry));
 }
