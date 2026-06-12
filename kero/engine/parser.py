@@ -79,9 +79,9 @@ class Parser:
                 columns[column.name] = column_node
 
 
-        selected_table = resolve.Table("temp", columns, len(columns), table_node.nrows)
+        selected_table = resolve.Table("output_t", columns, len(columns), table_node.nrows)
 
-        dag_node_output = OutputOp(input_table=dag_node_scan.input_table, output_table=selected_table, attribute={"select": list(columns.values())})
+        dag_node_output = OutputOp(input_table=dag_node_scan.input_table, output_table=selected_table, attribute={"select": list(columns.keys())})
         self.operations.append(dag_node_output)
 
         return self.operations
