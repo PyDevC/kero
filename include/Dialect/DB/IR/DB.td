@@ -10,6 +10,7 @@
 
 include "mlir/IR/DialectBase.td"
 include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/EnumAttr.td"
 
 //===----------------------------------------------------------------------===//
 // DB Dialect definition
@@ -74,4 +75,31 @@ def DBTable : DB_Dialect_Type<"Table", "table"> {
     let genVerifyDecl = 1;
 }
 
-#endif // DB_DIALECT_TD_
+def DBColumn : DB_Dialect_Type<"Column", "column"> {
+    let summary = "This is column type required for ops such as db.lt etc";
+
+    let parameters = (ins "::mlir::Type":$type);
+
+    let assemblyFormat = "`<` $type `>`";
+}
+
+
+//===----------------------------------------------------------------------===//
+// DB Cmp Ops Predicate Attrs
+//===----------------------------------------------------------------------===//
+// For now only Integer cmps are supported
+def DB_CmpIPredicateAttr : I64EnumAttr<
+    "CmpIPredicate", "", 
+    [
+        I64EnumAttrCase<"lt",  0>,
+        I64EnumAttrCase<"lte", 1>,
+        I64EnumAttrCase<"gt",  2>,
+        I64EnumAttrCase<"gte", 3>,
+        I64EnumAttrCase<"eq",  4>,
+        I64EnumAttrCase<"neq", 5>,
+    ]> {
+
+    let cppNamespace = "::mlir::db";
+}
+
+#endif // DB_DIALECT_TD

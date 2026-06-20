@@ -17,6 +17,8 @@
 #define GET_OP_CLASSES
 #include "Dialect/DB/IR/DBOps.cpp.inc"
 
+#include "Dialect/DB/IR/DBDialectEnum.cpp.inc"
+
 namespace mlir {
 namespace db {
 
@@ -120,6 +122,11 @@ llvm::LogicalResult OutputOp::verify() {
 
     return llvm::success();
 }
+
+llvm::LogicalResult CmpIOp::verify() { return llvm::success(); }
+llvm::LogicalResult LogicalAndOp::verify() { return llvm::success(); }
+llvm::LogicalResult LogicalOrOp::verify() { return llvm::success(); }
+llvm::LogicalResult LogicalNotOp::verify() { return llvm::success(); }
 
 } // namespace db
 } // namespace mlir

@@ -5,6 +5,8 @@ mlir_tablegen(DBDialectAttrs.h.inc -gen-attrdef-decls -attrdefs-dialect=db)
 mlir_tablegen(DBDialectAttrs.cpp.inc -gen-attrdef-defs -attrdefs-dialect=db)
 mlir_tablegen(DBDialectType.h.inc -gen-typedef-decls -name=db)
 mlir_tablegen(DBDialectType.cpp.inc -gen-typedef-defs -name=db)
+mlir_tablegen(DBDialectEnum.h.inc -gen-enum-decls -name=db)
+mlir_tablegen(DBDialectEnum.cpp.inc -gen-enum-defs -name=db)
 
 set(LLVM_TARGET_DEFINITIONS DBOps.td)
 mlir_tablegen(DBOps.h.inc -gen-op-decls -name=db)

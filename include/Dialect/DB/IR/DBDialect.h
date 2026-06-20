@@ -7,12 +7,15 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Bytecode/BytecodeOpInterface.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
 
 //===----------------------------------------------------------------------===//
 // DB Dialect
 //===----------------------------------------------------------------------===//
 
 #include "Dialect/DB/IR/DBDialect.h.inc"
+
+#include "Dialect/DB/IR/DBDialectEnum.h.inc"
 
 #define GET_ATTRDEF_CLASSES
 #include "Dialect/DB/IR/DBDialectAttrs.h.inc"
