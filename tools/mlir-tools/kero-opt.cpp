@@ -6,6 +6,8 @@
 #include "mlir/InitAllPasses.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
+#include "Conversion/Passes.h"
+
 int main(int argc, char** argv) {
     mlir::DialectRegistry registry;
     
@@ -14,6 +16,8 @@ int main(int argc, char** argv) {
 
     mlir::registerAllPasses();
     mlir::registerConvertToLLVMDependentDialectLoading(registry);
+
+    mlir::db::registerDBToTensorPasses();
     
     return mlir::asMainReturnCode(
         mlir::MlirOptMain(argc, argv, "Kero-binary", registry));
