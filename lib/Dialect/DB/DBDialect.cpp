@@ -123,6 +123,7 @@ llvm::LogicalResult OutputOp::verify() {
     return llvm::success();
 }
 
+llvm::LogicalResult FilterOp::verify() { return llvm::success(); }
 llvm::LogicalResult CmpIOp::verify() { return llvm::success(); }
 llvm::LogicalResult LogicalAndOp::verify() { return llvm::success(); }
 llvm::LogicalResult LogicalOrOp::verify() { return llvm::success(); }

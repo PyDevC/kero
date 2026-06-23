@@ -5,6 +5,7 @@
 
 include "Dialect/DB/IR/DB.td"
 include "mlir/IR/OpBase.td"
+include "mlir/Interfaces/ControlFlowInterfaces.td"
 
 
 //===----------------------------------------------------------------------===//
@@ -50,7 +51,29 @@ def DB_OutputOp : DB_Op<"output"> {
 //===----------------------------------------------------------------------===//
 // Ops for DB Filter Op region
 //===----------------------------------------------------------------------===//
-// TODO(PyDevC): write ops for logical comparison with their verifiers
+def DB_FilterOp : DB_Op<"filter"> {
+    let summary = "A region that applies the Cmp Filter Ops to the table";
+
+    let arguments = (ins DBTable:$table);
+
+    let regions = (region MaxSizedRegion<2>:$body);
+
+    let results = (outs DBTable:$filtered);
+
+    let assemblyFormat = "attr-dict $table `:` type($table) $body `->` `(` type($filtered) `)`";
+
+    let hasVerifier = 1;
+}
+
+def DB_FilterYieldOp : DB_Op<"filter_yield", [ReturnLike, Terminator,
+    HasParent<"FilterOp">]> {
+    let summary = "return the table from by applying the filter";
+
+    let arguments = (ins DBColumn:$mask, DBTable:$table);
+
+    let assemblyFormat = "attr-dict $mask `,` $table `:` `(` type($mask) `,` type($table)`)`";
+}
+
 // TODO(PyDevC): These functions should only be present in filter op region
 class DB_LogicalOps<string mnemonic> : DB_Op<mnemonic> {
     let arguments = (ins DBColumn:$col1, DBColumn:$col2);

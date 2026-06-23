@@ -63,6 +63,47 @@ module {
             -> !db.table<1, 100 : [#db.column<"age", i32, 100>]>
         return %selected : !db.table<1, 100 : [#db.column<"age", i32, 100>]>
     }
+
+    func.func @test_filter_op(
+        %arg0: !db.table<3, 100 : [
+            #db.column<"age", i32, 100>,
+            #db.column<"salary", i32, 100>,
+            #db.column<"budget", i32, 100>
+        ]> ) -> (
+        !db.table<3, -1 : [
+            #db.column<"age", i32, -1>,
+            #db.column<"salary", i32, -1>,
+            #db.column<"budget", i32, -1>
+        ]>) {
+
+        %filtered = db.filter %arg0 
+            : !db.table<3, 100 : [
+                #db.column<"age", i32, 100>,
+                #db.column<"salary", i32, 100>,
+                #db.column<"budget", i32, 100>
+            ]> {
+            ^bb0(%salary: !db.column<i32>):
+                %c0 = arith.constant 10 : i32
+                %0 = db.cmpi eq, %salary, %c0 : (!db.column<i32>, i32) -> !db.column<i1>
+    
+                db.filter_yield %0, %arg0 
+                : (!db.column<i1>, !db.table<3, 100: [ #db.column<"age", i32, 100>,
+                                                     #db.column<"salary", i32, 100>,
+                                                     #db.column<"budget", i32, 100>
+                ]>)
+
+            } -> (!db.table<3, -1: [
+                #db.column<"age", i32, -1>,
+                #db.column<"salary", i32, -1>,
+                #db.column<"budget", i32, -1>
+            ]>)
+
+        return %filtered : !db.table<3, -1: [
+                #db.column<"age", i32, -1>,
+                #db.column<"salary", i32, -1>,
+                #db.column<"budget", i32, -1>
+            ]>
+    }
 }
 
 module {
