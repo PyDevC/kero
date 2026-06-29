@@ -105,14 +105,3 @@ module {
             ]>
     }
 }
-
-module {
-    // This is not possible it's present here only for testing
-    func.func @test_db_types(%salary: !db.column<i32>, %const: i32) -> (!db.column<i1>) {
-        %0 = db.cmpi eq, %salary, %const : (!db.column<i32>, i32) -> !db.column<i1>
-        %1 = db.cmpi neq, %salary, %const : (!db.column<i32>, i32) -> !db.column<i1>
-
-        %and = db.and %0, %1 : (!db.column<i1>, !db.column<i1>) -> !db.column<i1>
-        return %and : !db.column<i1>
-    }
-}
