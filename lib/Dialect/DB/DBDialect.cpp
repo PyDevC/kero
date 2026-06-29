@@ -177,10 +177,10 @@ llvm::LogicalResult verifyOpsFromFilterOp(Operation* op, Type type, Location loc
 // other than if the operation is inside filter op region
 llvm::LogicalResult CmpIOp::verify() {
     auto cmpiOp = getOperation();
-    auto lhs = getOperand(0);
-    auto rhs = getOperand(1);
-    auto loc = getLoc();
-    return verifyOpsFromFilterOp(cmpiOp, lhs.getType(), rhs.getType(), loc);
+    if (failed(verifyOpInFilterRegion(cmpiOp))) {
+        return emitError() << "CmpI Op can only be used inside filter region";
+    }
+    return success();
 }
 
 llvm::LogicalResult LogicalAndOp::verify() {
