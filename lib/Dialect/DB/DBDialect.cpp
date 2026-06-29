@@ -123,11 +123,88 @@ llvm::LogicalResult OutputOp::verify() {
     return llvm::success();
 }
 
-llvm::LogicalResult FilterOp::verify() { return llvm::success(); }
-llvm::LogicalResult CmpIOp::verify() { return llvm::success(); }
-llvm::LogicalResult LogicalAndOp::verify() { return llvm::success(); }
-llvm::LogicalResult LogicalOrOp::verify() { return llvm::success(); }
-llvm::LogicalResult LogicalNotOp::verify() { return llvm::success(); }
+llvm::LogicalResult FilterOp::verify() {
+    // Verify argument types in Basic Blocks
+    return llvm::success();
+}
+
+llvm::LogicalResult verifyOpInFilterRegion(Operation* op) {
+    if (!op->getParentOfType<FilterOp>()) {
+        return failure();
+    }
+    return llvm::success();
+}
+
+llvm::LogicalResult verifyBooleanColumnType(Type type) {
+    auto dtype = cast<ColumnType>(type).getDtype();
+    if (!dtype.isInteger(1)) {
+        return failure();
+    }
+    return llvm::success();
+}
+
+llvm::LogicalResult verifyOpsFromFilterOp(Operation* op, Type lhs, Type rhs, Location loc) {
+    if (failed(verifyOpInFilterRegion(op))) {
+        return emitError(loc) << "Operation: " << op->getName()
+                              << " Doesn't exists in the filter region";
+    }
+
+    if (failed(verifyBooleanColumnType(lhs))) {
+        return emitError(loc) << "Operand LHS is not of boolean column type.";
+    }
+
+    if (failed(verifyBooleanColumnType(rhs))) {
+        return emitError(loc) << "Operand RHS is not of boolean column type.";
+    }
+
+    return success();
+}
+
+llvm::LogicalResult verifyOpsFromFilterOp(Operation* op, Type type, Location loc) {
+    if (failed(verifyOpInFilterRegion(op))) {
+        return emitError(loc) << "Operation: " << op->getName()
+                              << " Doesn't exists in the filter region";
+    }
+
+    if (failed(verifyBooleanColumnType(type))) {
+        return emitError(loc) << "Operand RHS is not of boolean column type.";
+    }
+
+    return success();
+}
+
+// TODO (PyDevC): For now I don't see anything is needed to verify
+// other than if the operation is inside filter op region
+llvm::LogicalResult CmpIOp::verify() {
+    auto cmpiOp = getOperation();
+    auto lhs = getOperand(0);
+    auto rhs = getOperand(1);
+    auto loc = getLoc();
+    return verifyOpsFromFilterOp(cmpiOp, lhs.getType(), rhs.getType(), loc);
+}
+
+llvm::LogicalResult LogicalAndOp::verify() {
+    auto andOp = getOperation();
+    auto lhs = getOperand(0);
+    auto rhs = getOperand(1);
+    auto loc = getLoc();
+    return verifyOpsFromFilterOp(andOp, lhs.getType(), rhs.getType(), loc);
+}
+
+llvm::LogicalResult LogicalOrOp::verify() {
+    auto orOp = getOperation();
+    auto lhs = getOperand(0);
+    auto rhs = getOperand(1);
+    auto loc = getLoc();
+    return verifyOpsFromFilterOp(orOp, lhs.getType(), rhs.getType(), loc);
+}
+
+llvm::LogicalResult LogicalNotOp::verify() {
+    auto notOp = getOperation();
+    auto rhs = getOperand();
+    auto loc = getLoc();
+    return verifyOpsFromFilterOp(notOp, rhs.getType(), loc);
+}
 
 } // namespace db
 } // namespace mlir
