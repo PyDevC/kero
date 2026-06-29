@@ -25,7 +25,7 @@ class DBTypeToTensorConverter : public TypeConverter {
         addConversion([](Type type) { return type; });
 
         addConversion([](ColumnType type) {
-            auto dtype = type.getType();
+            auto dtype = type.getDtype();
             auto shape = ShapedType::kDynamic;
             return RankedTensorType::get(shape, dtype);
         });
@@ -61,42 +61,18 @@ class FilterOpLowering : public OpConversionPattern<FilterOp> {
 
     LogicalResult matchAndRewrite(FilterOp Op, OneToNOpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const final {
-        auto nrows = Op.getTable().getType().getNrows();
-        auto i1 = IntegerType::get(getContext(), 1);
-        auto output = tensor::EmptyOp::create(rewriter, Op.getLoc(), {nrows}, i1);
-
-        auto inputs = adaptor.getRegions().front()->getArguments();
-
-        auto identityMap = AffineMap::get(1, 0, rewriter.getAffineDimExpr(0), getContext());
-        SmallVector<AffineMap> idxMap{};
-        for (size_t i{}; i < inputs.size(); ++i) {
-            idxMap.push_back(identityMap);
-        }
-        idxMap.push_back(identityMap);
-
-        auto initRank = cast<RankedTensorType>(inputs.front().getType()).getRank();
-        SmallVector<utils::IteratorType> iteratorType(initRank, utils::IteratorType::parallel);
-
-        auto filterLoop = linalg::GenericOp::create(rewriter, Op.getLoc(),
-                                                    output.getType(),
-                                                    inputs,
-                                                    ValueRange{output},
-                                                    idxMap,
-                                                    iteratorType,
-                                                    [&](OpBuilder& builder, Location loc, ValueRange blockArgs) {
-                                                    });
-
-        rewriter.replaceOp(Op, filterLoop);
         return success();
     }
 };
 
-class CmpIOPLowering : public OpConversionPattern<CmpIOp> {
+class FilterYieldOpLowering : public OpConversionPattern<FilterYieldOp> {
     public:
     using OpConversionPattern::OpConversionPattern;
 
-    LogicalResult matchAndRewrite(CmpIOp Op, OpAdaptor adaptor,
+    LogicalResult matchAndRewrite(FilterYieldOp Op, OneToNOpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const final {
+        auto newOp = adaptor.getOperands();
+        rewriter.replaceOpWithMultiple(Op, newOp);
         return success();
     }
 };
@@ -105,8 +81,24 @@ class OutputOpLowering : public OpConversionPattern<OutputOp> {
     public:
     using OpConversionPattern::OpConversionPattern;
 
-    LogicalResult matchAndRewrite(OutputOp Op, OpAdaptor adaptor,
+    LogicalResult matchAndRewrite(OutputOp Op, OneToNOpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const final {
+        auto tableType = Op.getTable().getType();
+        auto inputTensors = adaptor.getTable();
+        auto selectAttr = Op.getSelectAttr();
+        auto tableColumns = tableType.getColumns();
+
+        SmallVector<Value> outputTensors{};
+        for (auto select : selectAttr) {
+            auto colName = cast<StringAttr>(select).getValue();
+            for (auto [idx, col] : llvm::enumerate(tableColumns)) {
+                if (col.getName() == colName) {
+                    outputTensors.push_back(inputTensors[idx]);
+                    break;
+                }
+            }
+        }
+        rewriter.replaceOpWithMultiple(Op, outputTensors);
         return success();
     }
 };
@@ -182,6 +174,7 @@ struct DBToTensor : impl::DBToTensorBase<DBToTensor> {
         RewritePatternSet patterns(ctx);
         patterns.add<DecomposeFuncOp>(converter, ctx);
         patterns.add<ScanOpLowering>(converter, ctx);
+        patterns.add<OutputOpLowering>(converter, ctx);
 
         populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, converter);
         populateReturnOpTypeConversionPattern(patterns, converter);
