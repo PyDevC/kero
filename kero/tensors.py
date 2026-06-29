@@ -44,7 +44,7 @@ class StrTensor(BaseTensor):
     def __init__(self, data: List[str], name: str):
         """Need to be a list of string that converts to tensor.
         Converts the strings to ascii number and then converts each name to a list
-        Length of largest string is the lenght of each inner list, if any string
+        Length of largest string is the length of each inner list, if any string
         has less characters than the last one then rest of the elements are 
         filled with 0
         StrTensor.tensor = [[123,123,123], [123,123,0]]
@@ -152,7 +152,7 @@ class TableTensor:
 
 
     def _validate_shape(self):
-        """Checks for all columns to have smae number of rows
+        """Checks for all columns to have same number of rows
         """
         if not self.columns:
             return 

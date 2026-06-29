@@ -30,6 +30,6 @@ cmake .. -G $BUILD_SYSTEM \
       -DTHIRDPARTY_LLVM_DIR=$THIRDPARTY_LLVM_DIR \
       -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
 
-sudo cmake --build . -j $(nproc)
+ninja -j $(nproc)
 
 popd

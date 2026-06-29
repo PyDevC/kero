@@ -78,9 +78,9 @@ def DBTable : DB_Dialect_Type<"Table", "table"> {
 def DBColumn : DB_Dialect_Type<"Column", "column"> {
     let summary = "This is column type required for ops such as db.lt etc";
 
-    let parameters = (ins "::mlir::Type":$type);
+    let parameters = (ins "::mlir::Type":$dtype);
 
-    let assemblyFormat = "`<` $type `>`";
+    let assemblyFormat = "`<` $dtype `>`";
 }
 
 

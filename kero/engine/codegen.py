@@ -97,7 +97,6 @@ class AstToKeroConverter:
     def _make_output_op(self, node: OutputOp, inputs):
         with self.loc, ir.InsertionPoint(self.block):
             table_t = make_dbtable_type(node.output_table, self.context)
-            # TODO: fix the attribute, only collect the names of the columns
             output_op = db.output(output=table_t, table=inputs, select=node.attribute["select"])
             return output_op
 
