@@ -11,6 +11,7 @@ def DBToTensor : Pass<"db-to-tensor-and-linalg"> {
         "mlir::arith::ArithDialect",
         "mlir::tensor::TensorDialect",
         "mlir::linalg::LinalgDialect",
+        "mlir::scf::SCFDialect",
         "mlir::db::DBDialect",
     ];
 }

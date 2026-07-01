@@ -69,9 +69,9 @@ def DB_FilterYieldOp : DB_Op<"filter_yield", [ReturnLike, Terminator,
     HasParent<"FilterOp">]> {
     let summary = "return the table from by applying the filter";
 
-    let arguments = (ins DBColumn:$mask, DBTable:$table);
+    let arguments = (ins DBColumn:$mask);
 
-    let assemblyFormat = "attr-dict $mask `,` $table `:` `(` type($mask) `,` type($table)`)`";
+    let assemblyFormat = "attr-dict $mask `:` type($mask)";
 }
 
 // TODO(PyDevC): These functions should only be present in filter op region

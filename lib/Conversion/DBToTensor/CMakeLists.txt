@@ -9,6 +9,7 @@ add_mlir_dialect_library(DBToTensorPass
     LINK_LIBS PUBLIC
     MLIRArithDialect
     MLIRFuncDialect
+    MLIRSCFDialect
     MLIRTensorDialect
     MLIRLinalgDialect
     DB

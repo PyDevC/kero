@@ -43,11 +43,11 @@ def ColumnAttr : AttrDef<DB_Dialect, "Column"> {
 
     let parameters = (ins 
         "::mlir::StringAttr":$name, 
-        "::mlir::Type":$type, 
+        "::mlir::Type":$dtype, 
         "int64_t":$nrows
     );
 
-    let assemblyFormat = "`<` $name `,` $type `,` $nrows `>`";
+    let assemblyFormat = "`<` $name `,` $dtype `,` $nrows `>`";
 }
 
 //===----------------------------------------------------------------------===//
