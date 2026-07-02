@@ -1,10 +1,11 @@
-#include "mlir/CAPI/Registration.h"
 #include "kero-c/Registration.h"
+#include "Conversion/Passes.h"
 #include "Dialect/DB/IR/DBDialect.h"
-#include "mlir/CAPI/IR.h"
-#include "mlir/Conversion/Passes.h"
 
+#include "mlir/CAPI/IR.h"
+#include "mlir/CAPI/Registration.h"
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
+#include "mlir/Conversion/Passes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
@@ -18,4 +19,5 @@ void KeroRegisterAllDialects(MlirContext context) {
 }
 void KeroRegisterAllPasses() {
     mlir::registerAllPasses();
+    mlir::db::registerDBToTensorPasses();
 }
