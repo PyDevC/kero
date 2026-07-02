@@ -2,11 +2,11 @@ from unittest import TestCase
 
 class TestIRGen(TestCase):
     def test_ir_gen(self):
-        from kero.engine import codegen, parser
+        from kero.engine import Parser, codegen
         from kero.arrow.samples import all_number_dataset
 
         dataset = all_number_dataset()
-        par = parser.Parser(dataset)
+        par = Parser(dataset)
         operations = par.parse("select salary, spendings from employee")
 
         irgen = codegen.IRGen("salary_of_person", operations)
@@ -18,7 +18,7 @@ class TestAstToKeroConverter(TestCase):
         from kero.engine import _keroEngine
         import kero._engine._kero.ir as ir
         from kero._engine._kero.dialects import func, db
-        from kero.engine.parser import Parser
+        from kero.engine import Parser
         from kero.arrow.samples import all_number_dataset
 
         self.context = ir.Context()
@@ -27,7 +27,7 @@ class TestAstToKeroConverter(TestCase):
 
         dataset = all_number_dataset()
         parser = Parser(dataset)
-        self.operations = parser.parse("SELECT age, salary from employee")
+        self.operations = parser.parse("SELECT age from employee")
 
         _keroEngine.register_dialect(self.context)
 
@@ -45,11 +45,12 @@ class TestAstToKeroConverter(TestCase):
             ftype = ir.FunctionType.get(inputs=[table_t], results=[output_t])
 
             func_op = func.FuncOp("query", ftype)
+            func_op.attributes["llvm.emit_c_interface"] = ir.UnitAttr.get()
             entry_block = ir.Block.create_at_start(func_op.body, ftype.inputs)
             return entry_block
 
     def test_ast_to_kero_type_gen(self):
-        from kero.engine.codegen import AstToKeroConverter
+        from kero.engine.codegen import AstToKeroConverter, db_to_llvm_lowering
         import kero._engine._kero.ir as ir
         from kero._engine._kero.dialects import func, db
 
@@ -66,3 +67,5 @@ class TestAstToKeroConverter(TestCase):
                 out = generator.resolve_node(operation, out)
 
             func.return_([out])
+
+        db_to_llvm_lowering(self.module, self.context)

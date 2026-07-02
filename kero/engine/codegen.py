@@ -2,16 +2,16 @@
 from kero.engine import _keroEngine
 from kero._engine._kero.dialects import func, db
 import kero._engine._kero.ir as ir
+from kero._engine._kero.passmanager import PassManager
 
 from .parser import ScanOp, OutputOp
 from ..arrow.type_resolve import DBTypes, Table, Column, PYARROW_TO_DB_TYPES
 
 import typing as t
 
+CACHE: t.Dict[str, ir.Type] = {}
 
-CACHE = {}
-
-
+# TODO(PyDevC): For some reason the selected column get's remove and all other remains
 def make_dbtable_type(node: Table, context):
     if node.name in CACHE:
         return CACHE[node.name]
@@ -57,6 +57,8 @@ class IRGen:
 
                 with ir.InsertionPoint(entry_block):
                     func.return_([out])
+
+        CACHE.clear()
 
 
 class AstToKeroConverter:
@@ -113,3 +115,12 @@ class AstToKeroConverter:
         }
 
         return map
+
+def db_to_llvm_lowering(module, context):
+    with context:
+        pipeline='builtin.module(db-to-tensor-and-linalg)'
+        pm = PassManager.parse(pipeline, context)
+        pm.run(module.operation)
+
+    module.dump()
+    return module
