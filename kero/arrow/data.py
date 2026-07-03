@@ -9,7 +9,7 @@ class Dataset:
         if tables is not None:
             self.tables = tables
         else:
-            self.tables: t.Dict[str, pa.Table] = dict()
+            self.tables: t.Dict[str, pa.Table] = {}
 
     def __len__(self):
         return len(self.tables)
@@ -18,10 +18,18 @@ class Dataset:
         if name in self.tables:
             return self.tables[name]
 
-        # TODO(PyDevC): Maybe we need to be a little bit less verbose
         raise arrowexce.TableNotFoundException(
-            f"Table not found in Dataset: {self.tables}"
+            f"Table not found in Dataset: {self.tables.keys()}"
         )
 
     def add_table(self, name: str, table: pa.Table) -> None:
         self.tables[name] = table
+
+    def get_table_as_arrays(self, name: str):
+        if name in self.tables:
+            table = self.tables[name]
+            return (col.to_numpy() for col in table.columns)
+
+        raise arrowexce.TableNotFoundException(
+            f"Table not found in Dataset: {self.tables.keys()}"
+        )

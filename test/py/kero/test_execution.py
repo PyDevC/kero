@@ -92,7 +92,7 @@ class TestExecution(TestCase):
             salary_in = np.array([10 if i % 10 == 0 else 50 for i in range(100)], dtype=np.int32)
             budget_in = np.random.randint(100, 1000, size=100, dtype=np.int32)
             
-            out_salary = np.empty(100, dtype=np.int32)
+            out_salary = np.empty(0, dtype=np.int32)
             
             arg0 = ctypes.pointer(get_ranked_memref_descriptor(age_in))
             arg1 = ctypes.pointer(get_ranked_memref_descriptor(salary_in))
