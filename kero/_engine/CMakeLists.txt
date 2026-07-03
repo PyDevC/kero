@@ -3,7 +3,7 @@
 ## We will figure out what to do about fixed python version
 set(DEV_MODULE Development.Module)
 
-find_package(Python 3.12 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
+find_package(Python 3.11 COMPONENTS Interpreter ${DEV_MODULE} REQUIRED)
 
 ## There is chance I would want to remove this in future
 ## TODO: Cmake does not recognizes nanobind as of now without this command
@@ -19,7 +19,7 @@ set(CMAKE_PLATFORM_NO_VERSIONED_SONAME ON)
 ## Root for kero/_engine/_kero, this is where the MLIR Part will live
 set(KERO_MLIR_PYTHON_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/_kero")
 
-## Add the _kero in kero/__init__.py
+## NOTE: Add the _kero in kero/__init__.py
 add_compile_definitions("MLIR_PYTHON_PACKAGE_PREFIX=kero._engine._kero.")
 
 ################################################################################
