@@ -7,6 +7,8 @@ if [[ -z "$THIRDPARTY_LLVM_DIR" ]]; then
     exit 0
 fi
 
-export MLIR_DIR="$THIRDPARTY_LLVM_DIR/build/lib/cmake/mlir"
 export LLVM_DIR="$THIRDPARTY_LLVM_DIR/build/lib/cmake/llvm"
-pip install --no-build-isolation -e . -v
+
+python3 setup.py bdist_wheel
+pip uninstall kero -y
+pip install dist/kero-0.1.0-cp312-cp312-linux_x86_64.whl

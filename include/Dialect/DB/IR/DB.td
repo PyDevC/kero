@@ -1,58 +1,105 @@
-#ifndef DB_Dialect
-#define DB_Dialect
+//===-------- DB.td - Base defs for db dialect -------------*- tablegen -*-===//
+//
+//===----------------------------------------------------------------------===//
+// This file contains the type dialect and type definitions for `db` dialect.
+//===----------------------------------------------------------------------===//
+
+#ifndef DB_DIALECT_TD_
+#define DB_DIALECT_TD_
+
 
 include "mlir/IR/DialectBase.td"
 include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/EnumAttr.td"
 
+//===----------------------------------------------------------------------===//
+// DB Dialect definition
+//===----------------------------------------------------------------------===//
 def DB_Dialect : Dialect {
-    let summary = "Database Dialect for sql query representation.";
+    let summary = "Database Dialect to model SQL types and operations.";
     let description = [{
-        DB dialect represents various operations of sql query such as select, where, from, agg, etc.
+        `db` dialect is designed to generate IR from DB AST which mimics the 
+        operations from Apache Arrow and SQL, our main goal is to provide a 
+        middle ground for ease of use and direct compute mapping to 'kero' 
+        dialect.
+
+        As of now we try to not have any other dialect dependency other than 
+        `func` dialect.
     }];
 
     let name = "db";
     let cppNamespace = "::mlir::db";
     let useDefaultTypePrinterParser = 1;
+    let useDefaultAttributePrinterParser = 1;
 }
 
-// Base Class for Types
-class DB_Dialect_Type<string name, string typeMnemonic> : TypeDef<DB_Dialect, name> {
+// Column Attribute for Table type
+def ColumnAttr : AttrDef<DB_Dialect, "Column"> {
+    let mnemonic = "column";
+    let summary = "Attribute for single column in the table";
+    let description = [{
+        Represents one column in the Table
+    }];
+
+    let parameters = (ins 
+        "::mlir::StringAttr":$name, 
+        "::mlir::Type":$dtype, 
+        "int64_t":$nrows
+    );
+
+    let assemblyFormat = "`<` $name `,` $dtype `,` $nrows `>`";
+}
+
+//===----------------------------------------------------------------------===//
+// DB Dialect Base Types
+//===----------------------------------------------------------------------===//
+class DB_Dialect_Type<string name, string typeMnemonic> : 
+    TypeDef<DB_Dialect, name> {
     let mnemonic = typeMnemonic;
 }
 
-// Basic Types in db
 def DBTable : DB_Dialect_Type<"Table", "table"> {
-    let summary = "DB Table type to represent table.";
+    let summary = "Table type shows the collection of Columns.";
     let description = [{
-        DB Table type is used with from clause for pulling data from the table.
+        Table Represents the collection of column tied together.
     }];
 
-    let parameters = (ins StringRefParameter<"table name">:$table_name);
-    let assemblyFormat = "`<` $table_name `>`";
+    let parameters = (ins 
+        ArrayRefParameter<"::mlir::db::ColumnAttr">:$columns, 
+        "int64_t":$ncols, 
+        "int64_t":$nrows
+    );
+
+    let assemblyFormat = "`<` $ncols `,` $nrows `:` `[` $columns `]` `>`";
+
+    let genVerifyDecl = 1;
 }
 
 def DBColumn : DB_Dialect_Type<"Column", "column"> {
-    let summary = "DB Column type to represent column associated to a table.";
-    let description = [{
-        DB Column type has three parts to it, one is table it's part of, second is name of the column, and third is data type of the column.
-    }];
+    let summary = "This is column type required for ops such as db.lt etc";
 
-    let parameters = (ins StringRefParameter<"table name">:$table_name, StringRefParameter<"column name">:$column_name, TypeParameter<"::mlir::Type", "AnyType">:$dtype);
-    let assemblyFormat = "`<` $table_name `,` $column_name `,` $dtype `>`";
+    let parameters = (ins "::mlir::Type":$dtype);
+
+    let assemblyFormat = "`<` $dtype `>`";
 }
 
-def DBRow : DB_Dialect_Type<"Row", "row"> {
-    let summary = "DB Row type to represent row associated to a column.";
-    let description = [{
-        DB Row type is like index of the current row being processed.
-    }];
+
+//===----------------------------------------------------------------------===//
+// DB Cmp Ops Predicate Attrs
+//===----------------------------------------------------------------------===//
+// For now only Integer cmps are supported
+def DB_CmpIPredicateAttr : I64EnumAttr<
+    "CmpIPredicate", "", 
+    [
+        I64EnumAttrCase<"lt",  0>,
+        I64EnumAttrCase<"lte", 1>,
+        I64EnumAttrCase<"gt",  2>,
+        I64EnumAttrCase<"gte", 3>,
+        I64EnumAttrCase<"eq",  4>,
+        I64EnumAttrCase<"neq", 5>,
+    ]> {
+
+    let cppNamespace = "::mlir::db";
 }
 
-def DBResult : DB_Dialect_Type<"Result", "result"> {
-    let summary = "DB Result Type to represent result of any operation.";
-    let description = [{
-        DB Result type is used to represent any kind of result since the result of any query should be of same type.
-    }];
-}
-
-#endif // DB_Dialect
+#endif // DB_DIALECT_TD

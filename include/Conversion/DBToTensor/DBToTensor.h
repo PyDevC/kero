@@ -1,5 +1,5 @@
-#ifndef CONVERSION_DBTOTENSOR_H_
-#define CONVERSION_DBTOTENSOR_H_
+#ifndef CONVERSION_DB_TO_TENSOR_H_
+#define CONVERSION_DB_TO_TENSOR_H_
 
 #include <memory>
 
@@ -17,4 +17,4 @@ namespace db {
 } // namespace db
 } // namespace mlir
 
-#endif // CONVERSION_DBTOTENSOR_H_
+#endif // CONVERSION_DB_TO_TENSOR_H_

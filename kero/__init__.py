@@ -1,21 +1,23 @@
-from .tensors import (
-    DateTensor,
-    NumTensor,
-    ScalarTensor,
-    StrTensor,
-    TableTensor
-)
-
-import kero.engine as engine
-
-__all__ = [
-    "DateTensor",
-    "NumTensor",
-    "ScalarTensor",
-    "StrTensor",
-    "TableTensor",
-    "engine",
-]
-
-# Please keep this list sorted
-assert __all__ == sorted(__all__)
+try:
+    import torch
+except ImportError:
+    __all__ = []
+else:
+    from .tensors import (
+        DateTensor,
+        NumTensor,
+        ScalarTensor,
+        StrTensor,
+        TableTensor
+    )
+    
+    __all__ = [
+        "DateTensor",
+        "NumTensor",
+        "ScalarTensor",
+        "StrTensor",
+        "TableTensor",
+    ]
+    
+    # Please keep this list sorted
+    assert __all__ == sorted(__all__)

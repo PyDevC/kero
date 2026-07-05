@@ -1,20 +1,22 @@
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 
-set(LIBS
+add_mlir_public_c_api_library(KeroCAPI
+    Dialect.cpp
+    Registration.cpp
+
+    ADDITIONAL_HEADER_DIRS
+    ${PROJECT_SOURCE_DIR}/include/kero-c/
+
+    LINK_LIBS PUBLIC
     ${dialect_libs}
     ${conversion_libs}
     MLIRIR
-
+    MLIRCAPIIR
     MLIRRegisterAllDialects
-
-    MLIROptLib
     MLIRPass
     MLIRTransforms
     MLIRRegisterAllPasses
+    MLIRSupport
+    DB
 )
-
-add_llvm_executable(kero-opt kero-opt.cpp)
-llvm_update_compile_flags(kero-opt)
-target_link_libraries(kero-opt PRIVATE ${LIBS})
-mlir_check_all_link_libraries(kero-opt)

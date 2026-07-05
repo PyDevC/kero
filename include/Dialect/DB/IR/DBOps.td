@@ -1,52 +1,117 @@
+//===---- DbOps.td - Arith op definitions ------------------*- tablegen -*-===//
+
 #ifndef DIALECT_DB_IR_DBOPS_TD_
 #define DIALECT_DB_IR_DBOPS_TD_
 
-include "DB.td"
+include "Dialect/DB/IR/DB.td"
 include "mlir/IR/OpBase.td"
-include "mlir/IR/AttrTypeBase.td"
+include "mlir/Interfaces/ControlFlowInterfaces.td"
 
-/// Table Container which is like pointer to a table
-class DB_Op<string mnemonic> : Op<DB_Dialect, mnemonic> {
+
+//===----------------------------------------------------------------------===//
+// Base class for all DB ops
+//===----------------------------------------------------------------------===//
+class DB_Op<string mnemonic, list<Trait> traits = []> : Op<DB_Dialect, mnemonic, traits> {
 }
 
-class DB_TableOp<string mnemonic> : DB_Op<mnemonic> {
-    let arguments = (ins DBTable:$table);
-    let results = (outs DBResult:$result);
-    let assemblyFormat = "$table attr-dict `:` type($table) `->` type($result)";
+//===----------------------------------------------------------------------===//
+// General Ops for DB
+//===----------------------------------------------------------------------===//
+// TODO(PyDevC): we practically don't need this operation but I am keeping it for future lowering applications
+def DB_ScanOp : DB_Op<"scan"> {
+    let summary = "Scan Op just to indicate that this is a select query operation";
+    // TODO(PyDevC): Write the detailed description for this operation
+    // let description = [{
+    // }];
+    let arguments = (ins
+        DBTable:$table,
+        OptionalAttr<StrAttr>:$table_name
+    );
+
+    let results = (outs DBTable:$output);
+
+    let assemblyFormat = "attr-dict $table `:` type($table) `->` type($output)";
 }
 
-def DB_ScanOp : DB_TableOp<"scan"> {
-    let summary = "Scans the table for columns";
+def DB_OutputOp : DB_Op<"output"> {
+    let summary = "It selects some the columns from table type to output";
+
+    let arguments = (ins
+        DBTable:$table,
+        StrArrayAttr:$select
+    );
+
+    let results = (outs DBTable:$output);
+
+    let assemblyFormat = "attr-dict $table `:` type($table) `->` type($output)";
+
+    let hasVerifier = 1;
 }
 
-def DB_ReturnOp : Op<DB_Dialect, "return", [Terminator]> {
-    let arguments = (ins AnyType:$input);
-    let assemblyFormat = "$input attr-dict `:` type($input)";
-}
-
+//===----------------------------------------------------------------------===//
+// Ops for DB Filter Op region
+//===----------------------------------------------------------------------===//
 def DB_FilterOp : DB_Op<"filter"> {
-    let summary = "Filter based on predicate.";
-    let arguments = (ins DBResult:$input);
-    let results = (outs DBResult:$output);
+    let summary = "A region that applies the Cmp Filter Ops to the table";
 
-    let regions = (region SizedRegion<1>:$region);
-    let assemblyFormat = "$input $region attr-dict `:` `(` type($input) `)` `->` type($output)";
+    let arguments = (ins DBTable:$table);
+
+    let regions = (region MaxSizedRegion<2>:$body);
+
+    let results = (outs DBTable:$filtered);
+
+    let assemblyFormat = "attr-dict $table `:` type($table) $body `->` `(` type($filtered) `)`";
+
+    let hasVerifier = 1;
 }
 
-def DB_GetColumnOp : DB_Op<"getcol"> {
-    let summary = "Get specific column from the table result";
-    let arguments = (ins DBRow:$row, DBColumn:$column);
-    let results = (outs AnyType:$val);
+def DB_FilterYieldOp : DB_Op<"filter_yield", [ReturnLike, Terminator,
+    HasParent<"FilterOp">]> {
+    let summary = "return the table from by applying the filter";
 
-    let assemblyFormat = "$row `,` $column attr-dict `:` `(` type($row) `,` type($column) `)` `->` type($val)";
+    let arguments = (ins DBColumn:$mask);
+
+    let assemblyFormat = "attr-dict $mask `:` type($mask)";
 }
 
-def DB_ProjectOp : DB_Op<"project"> {
-    let summary = "Project the perdicate from the scanned tables.";
-    let arguments = (ins DBResult:$filter);
-    let results = (outs DBResult:$result);
+// TODO(PyDevC): These functions should only be present in filter op region
+class DB_LogicalOps<string mnemonic> : DB_Op<mnemonic> {
+    let arguments = (ins DBColumn:$col1, DBColumn:$col2);
 
-    let assemblyFormat = "$filter attr-dict `:` type($filter) `->` type($result)";
+    let results = (outs DBColumn:$result);
+
+    let assemblyFormat = "attr-dict $col1 `,` $col2 `:` `(` type($col1) `,` type($col2) `)` `->` type($result)";
+
+    let hasVerifier = 1;
+}
+
+def DB_LogicalAndOp : DB_LogicalOps<"and"> {
+    let summary = "Performs logical and on two boolean columns";
+}
+
+def DB_LogicalOrOp : DB_LogicalOps<"or"> {
+    let summary = "Performs logical or on two boolean columns";
+}
+
+// Logical not only takes in a column so we overwrite args and asm
+def DB_LogicalNotOp : DB_LogicalOps<"not"> {
+    let summary = "Performs logical not on boolean column";
+
+    let arguments = (ins DBColumn:$col);
+
+    let assemblyFormat = "attr-dict $col `:` `(` type($col) `)` `->` type($result)";
+}
+
+def DB_CmpIOp : DB_Op<"cmpi"> {
+    let summary = "Performs comparison between two column based on given predicate";
+
+    let arguments = (ins DB_CmpIPredicateAttr:$predicate, DBColumn:$col, AnyType:$constint);
+
+    let results = (outs DBColumn:$result);
+
+    let assemblyFormat = "attr-dict $predicate `,` $col `,` $constint `:` `(` type($col) `,` type($constint) `)` `->` type($result)";
+
+    let hasVerifier = 1;
 }
 
 #endif // DIALECT_DB_IR_DBOPS_TD_

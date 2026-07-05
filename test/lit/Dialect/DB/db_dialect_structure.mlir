@@ -1,53 +1,103 @@
 // RUN: kero-opt %s | FileCheck %s
 
-// CHECK-LABEL: @test_db_types
-// CHECK-SAME: (%arg0: !db.table<"user">, %arg1: !db.column<"user", "id", i32>)
 module {
-    func.func @test_db_types (%arg0: !db.table<"user">, %arg1: !db.column<"user", "id", i32>) {
+    //CHECK: func.func @test_db_types
+    func.func @test_db_types(
+        %arg0: !db.table<3, 100 : [
+            #db.column<"age", i32, 100>,
+            #db.column<"salary", i32, 100>,
+            #db.column<"budget", i32, 100>
+        ]>
+    ) -> () {
         return
     }
-}
 
-// CHECK-LABEL: @test_db_scan_op
-module {
-    func.func @test_db_scan_op (%arg0: !db.table<"user">) -> !db.result {
-        // CHECK: db.scan
-        %scan0 = db.scan %arg0 : !db.table<"user"> -> !db.result
-        return %scan0 : !db.result
+    // CHECK: func.func @test_scan_op
+    func.func @test_scan_op(
+        %arg0: !db.table<3, 100 : [
+            #db.column<"age", i32, 100>,
+            #db.column<"salary", i32, 100>,
+            #db.column<"budget", i32, 100>
+        ]> ) -> (
+        !db.table<3, 100 : [
+            #db.column<"age", i32, 100>,
+            #db.column<"salary", i32, 100>,
+            #db.column<"budget", i32, 100>
+        ]>) {
+
+        %user = db.scan %arg0 
+            : !db.table<3, 100 : [
+                #db.column<"age", i32, 100>,
+                #db.column<"salary", i32, 100>,
+                #db.column<"budget", i32, 100>
+            ]>
+            -> !db.table<3, 100 : [
+                #db.column<"age", i32, 100>,
+                #db.column<"salary", i32, 100>,
+                #db.column<"budget", i32, 100>
+            ]>
+
+        return %user : !db.table<3, 100 : [
+                #db.column<"age", i32, 100>,
+                #db.column<"salary", i32, 100>,
+                #db.column<"budget", i32, 100>
+            ]>
     }
 
-}
+    func.func @test_output_op(
+        %arg0: !db.table<3, 100 : [
+            #db.column<"age", i32, 100>,
+            #db.column<"salary", i32, 100>,
+            #db.column<"budget", i32, 100>
+        ]> ) -> (
+        !db.table<1, 100 : [
+            #db.column<"age", i32, 100>
+        ]>) {
 
-module {
-    // CHECK-LABEL: @test_db_filter_op
-    func.func @test_db_filter_op (%arg0: !db.table<"user">, %arg_age: !db.column<"user", "age", i32>) -> !db.result {
-        // CHECK-NEXT: %[[RESULT:.*]] = db.scan %arg0 : <"user">
-        %scan0 = db.scan %arg0 : !db.table<"user"> -> !db.result
-        %filtered = db.filter %scan0 {
-            ^bb0(%row : !db.row):
-                %age_val = db.getcol %row , %arg_age : (!db.row, !db.column<"user", "age", i32>) -> i32
-                %age_limit = arith.constant 10 : i32
-                %cond = arith.cmpi sgt, %age_val, %age_limit : i32
-                db.return %cond : i1
-        } : (!db.result) -> !db.result
-        return %filtered : !db.result
+        %selected = db.output { select = ["age"] } %arg0 
+            : !db.table<3, 100 : [
+                #db.column<"age", i32, 100>,
+                #db.column<"salary", i32, 100>,
+                #db.column<"budget", i32, 100>
+            ]>
+            -> !db.table<1, 100 : [#db.column<"age", i32, 100>]>
+        return %selected : !db.table<1, 100 : [#db.column<"age", i32, 100>]>
     }
+
+    func.func @test_filter_op(
+        %arg0: !db.table<3, 100 : [
+            #db.column<"age", i32, 100>,
+            #db.column<"salary", i32, 100>,
+            #db.column<"budget", i32, 100>
+        ]> ) -> (
+        !db.table<3, -1 : [
+            #db.column<"age", i32, -1>,
+            #db.column<"salary", i32, -1>,
+            #db.column<"budget", i32, -1>
+        ]>) {
+
+        %filtered = db.filter %arg0 
+            : !db.table<3, 100 : [
+                #db.column<"age", i32, 100>,
+                #db.column<"salary", i32, 100>,
+                #db.column<"budget", i32, 100>
+            ]> {
+            ^bb0(%age: !db.column<i32>, %salary: !db.column<i32>, %budget: !db.column<i32>):
+                %c0 = arith.constant 10 : i32
+                %0 = db.cmpi eq, %salary, %c0 : (!db.column<i32>, i32) -> !db.column<i1>
     
-    // CHECK-LABEL: @test_db_projection_op
-    func.func @test_db_projection_op (%arg0: !db.table<"user">, %arg_age: !db.column<"user", "age", i32>) ->  !db.result {
-        %filtered = func.call @test_db_filter_op(%arg0, %arg_age) : (!db.table<"user">, !db.column<"user", "age", i32>) -> !db.result
-        %projected = db.project %filtered : !db.result -> !db.result
-        return %projected : !db.result
-    }
-}
+                db.filter_yield %0 : !db.column<i1>
 
-// CHECK: @query
-func.func @query (%arg0: !db.table<"PERSON">, %arg_age: !db.column<"PERSON", "age", i32>) -> !db.result {
-    %scan0 = db.scan %arg0 : !db.table<"PERSON"> -> !db.result
-    %filter = db.filter %scan0 {
-        ^bb0(%row : !db.row):
-            %no_limit = arith.constant 1 : i32
-            db.return %no_limit : i32
-    } : (!db.result) -> !db.result
-    return %filter : !db.result
+            } -> (!db.table<3, -1: [
+                #db.column<"age", i32, -1>,
+                #db.column<"salary", i32, -1>,
+                #db.column<"budget", i32, -1>
+            ]>)
+
+        return %filtered : !db.table<3, -1: [
+                #db.column<"age", i32, -1>,
+                #db.column<"salary", i32, -1>,
+                #db.column<"budget", i32, -1>
+            ]>
+    }
 }

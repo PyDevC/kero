@@ -1,16 +1,19 @@
-#ifndef CONVERSION_DBTOTENSOR_TD_
-#define CONVERSION_DBTOTENSOR_TD_
+#ifndef CONVERSION_DB_TO_TENSOR_TD_
+#define CONVERSION_DB_TO_TENSOR_TD_
 
 include "mlir/Pass/PassBase.td"
 
-def DBToTensor : Pass<"db-to-tensor"> {
-    let summary = "Lower `db-dialect` to tensor dialect.";
+def DBToTensor : Pass<"db-to-tensor-and-linalg"> {
+    let summary = "lowers db dialect operations directly to Tensor and linalg dialects.";
+
     let dependentDialects = [
+        "mlir::func::FuncDialect",
         "mlir::arith::ArithDialect",
         "mlir::tensor::TensorDialect",
         "mlir::linalg::LinalgDialect",
+        "mlir::scf::SCFDialect",
         "mlir::db::DBDialect",
     ];
 }
 
-#endif // CONVERSION_DBTOTENSOR_TD_
+#endif // CONVERSION_DB_TO_TENSOR_TD_

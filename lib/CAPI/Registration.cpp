@@ -1,24 +1,24 @@
+#include "kero-c/Registration.h"
+#include "Conversion/Passes.h"
 #include "Dialect/DB/IR/DBDialect.h"
 
+#include "mlir/CAPI/IR.h"
+#include "mlir/CAPI/Registration.h"
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
+#include "mlir/Conversion/Passes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
-#include "Conversion/Passes.h"
-
-int main(int argc, char** argv) {
+void KeroRegisterAllDialects(MlirContext context) {
     mlir::DialectRegistry registry;
-    
     mlir::registerAllDialects(registry);
     registry.insert<mlir::db::DBDialect>();
-
-    mlir::registerAllPasses();
     mlir::registerConvertToLLVMDependentDialectLoading(registry);
-
+    unwrap(context)->appendDialectRegistry(registry);
+}
+void KeroRegisterAllPasses() {
+    mlir::registerAllPasses();
     mlir::db::registerDBToTensorPasses();
-    
-    return mlir::asMainReturnCode(
-        mlir::MlirOptMain(argc, argv, "Kero-binary", registry));
 }
