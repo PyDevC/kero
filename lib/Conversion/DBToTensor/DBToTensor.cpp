@@ -312,7 +312,7 @@ class OutputOpLowering : public OpConversionPattern<OutputOp> {
         auto tableType = Op.getTable().getType();
         auto selectAttr = Op.getSelectAttr();
         auto tableColumns = tableType.getColumns();
-        auto inputTensors = adaptor.getOperands();
+        auto inputTensors = adaptor.getOperands().front();
 
         llvm::DenseSet<StringRef> selectedNames;
         for (auto select : selectAttr) {
@@ -320,14 +320,14 @@ class OutputOpLowering : public OpConversionPattern<OutputOp> {
             selectedNames.insert(colName);
         }
 
-        SmallVector<ValueRange> outputTensors{};
-        for (auto [idx, valRange] : llvm::enumerate(inputTensors)) {
+        SmallVector<Value> selected;
+        for (auto [idx, val] : llvm::enumerate(inputTensors)) {
             if (selectedNames.contains(tableColumns[idx].getName())) {
-                outputTensors.push_back(valRange.front());
+                selected.push_back(val);
             }
         }
 
-        rewriter.replaceOpWithMultiple(Op, outputTensors);
+        rewriter.replaceOpWithMultiple(Op, {ValueRange(selected)});
         return success();
     }
 };
