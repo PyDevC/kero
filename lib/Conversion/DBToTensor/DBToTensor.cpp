@@ -53,162 +53,209 @@ class ScanOpLowering : public OpConversionPattern<ScanOp> {
     using OpConversionPattern::OpConversionPattern;
 
     LogicalResult matchAndRewrite(ScanOp Op, OneToNOpAdaptor adaptor,
-                                  ConversionPatternRewriter& rewriter) const final {
+                                  ConversionPatternRewriter& rewriter) const override {
         auto newOp = adaptor.getOperands();
         rewriter.replaceOpWithMultiple(Op, newOp);
         return success();
     }
 };
 
+linalg::GenericOp genericMaskedTensorOp(FilterOp Op, OpBuilder& builder,
+                                        Location loc, ValueRange blockArgs) {
+    auto identityType = builder.getI1Type();
+    auto tensorSize = Op.getTable().getType().getNrows(); // Size of Mask Tensor
+    auto maskedTensor = tensor::EmptyOp::create(
+        builder, Op.getLoc(), {tensorSize}, identityType);
+
+    auto loopMap = builder.getDimIdentityMap();
+    // indexing Maps should be equal to blockArguments + 1 since
+    // we have to input extra argument for maskedTensor
+    SmallVector<AffineMap> indexingMaps(blockArgs.size() + 1, loopMap);
+    SmallVector<utils::IteratorType> iteratorTypes{utils::IteratorType::parallel};
+
+    auto maskOp = linalg::GenericOp::create(
+        builder, loc,
+        TypeRange{maskedTensor.getType()},
+        blockArgs,
+        ValueRange{maskedTensor},
+        indexingMaps,
+        iteratorTypes,
+        [&](OpBuilder& nestedBuilder, Location nestedLoc, ValueRange nestedblockArgs) {
+            Block* oldBlock = &Op.getRegion().front();
+            IRMapping mapping;
+            for (auto [oldArg, newArg] : llvm::zip(oldBlock->getArguments(), nestedblockArgs.drop_back())) {
+                mapping.map(oldArg, newArg);
+            }
+
+            // required for recrusive lowering
+            for (auto& innerOp : oldBlock->getOperations()) {
+                nestedBuilder.clone(innerOp, mapping);
+            }
+        });
+
+    return maskOp;
+}
+
+scf::ForOp scfNewTensorSizeLoopFromMask(
+    FilterOp Op, OpBuilder& builder,
+    Location loc, Value maskedTensor, arith::ConstantIndexOp lowerBound,
+    arith::ConstantIndexOp upperBound, arith::ConstantIndexOp step) {
+    auto newTensorSize = arith::ConstantIndexOp::create(builder, loc, 0);
+    auto newTensorSizeLoop = scf::ForOp::create(
+        builder, loc,
+        lowerBound, upperBound,
+        step,
+        ValueRange{newTensorSize},
+        [&](OpBuilder& nestedBuilder, Location nestedLoc, Value iter, ValueRange nestedblockArgs) {
+            // %mask_val = tensor.extract %maskeTensor[%iter] : tensor<upperBoundxtype>
+            auto maskVal = tensor::ExtractOp::create(
+                nestedBuilder, nestedLoc, maskedTensor, ValueRange{iter});
+            auto ifOp = scf::IfOp::create(
+                nestedBuilder, nestedLoc,
+                TypeRange{newTensorSize.getType()}, maskVal, true, true);
+
+            // if maskVal then
+            //     newTensorSize_0 = newTensorSize + 1
+            //     scf.yield newTensorSize_0
+            //  else
+            //     scf.yield
+            //
+            // Then Block
+            {
+                OpBuilder::InsertionGuard insertionGuard(nestedBuilder);
+                nestedBuilder.setInsertionPointToStart(ifOp.thenBlock());
+
+                auto newTensorSizeUpdate = arith::AddIOp::create(
+                    nestedBuilder, nestedLoc,
+                    newTensorSize.getType(), nestedblockArgs[0], step);
+
+                scf::YieldOp::create(
+                    nestedBuilder, nestedLoc, newTensorSizeUpdate.getResult());
+            }
+
+            // Else Block
+            {
+                OpBuilder::InsertionGuard insertionGuard(nestedBuilder);
+                nestedBuilder.setInsertionPointToStart(ifOp.elseBlock());
+                scf::YieldOp::create(nestedBuilder, nestedLoc, nestedblockArgs[0]);
+            }
+            scf::YieldOp::create(nestedBuilder, nestedLoc, ifOp.getResult(0));
+        });
+
+    return newTensorSizeLoop;
+}
+
+scf::ForOp applyMaskToOutputTensors(
+    FilterOp Op, OpBuilder& builder,
+    Location loc, arith::ConstantIndexOp lowerBound,
+    arith::ConstantIndexOp upperBound, arith::ConstantIndexOp step,
+    ValueRange initArgs, Value maskedTensor, SmallVector<Value> inputTensors) {
+    auto applyMask = scf::ForOp::create(
+        builder, loc,
+        lowerBound, upperBound,
+        step, initArgs,
+        [&](OpBuilder& nestedBuilder, Location nestedLoc, Value iter, ValueRange nestedblockArgs) {
+            // maskVal = tensor.extract %maskedTensor[%iter]
+            // if maskVal then
+            //     tensorVal =  tensor.extract %inputTensor[%iter]
+            //     newTensor = tensor.insert %newTensor[%index], tensorVal
+            //     updatedIndex = arith.addi index + step
+            //     scf.yield nestedblockArgs + updatedIndex
+            // else
+            //     scf.yield nestedblockArgs
+            auto maskVal = tensor::ExtractOp::create(
+                nestedBuilder, nestedLoc, maskedTensor, iter);
+            auto ifOp = scf::IfOp::create(
+                nestedBuilder, nestedLoc,
+                nestedblockArgs.getTypes(), maskVal, true, true);
+
+            // Then Block
+            {
+                OpBuilder::InsertionGuard insertionGuard(nestedBuilder);
+                nestedBuilder.setInsertionPointToStart(ifOp.thenBlock());
+
+                SmallVector<Value> innerIfOpResults{};
+                innerIfOpResults.reserve(inputTensors.size());
+                for (size_t i{}; i < inputTensors.size(); ++i) {
+                    auto tensorVal = tensor::ExtractOp::create(
+                        nestedBuilder, nestedLoc, inputTensors[i], iter);
+
+                    auto newTensor = tensor::InsertOp::create(
+                        nestedBuilder, nestedLoc,
+                        tensorVal, nestedblockArgs[i], nestedblockArgs.back());
+
+                    innerIfOpResults.push_back(newTensor.getResult());
+                }
+
+                auto updatedIndex = arith::AddIOp::create(
+                    nestedBuilder, nestedLoc,
+                    step.getType(), nestedblockArgs.back(), step);
+
+                innerIfOpResults.push_back(updatedIndex.getResult());
+
+                scf::YieldOp::create(nestedBuilder, nestedLoc, innerIfOpResults);
+            }
+
+            // Else Block
+            {
+                OpBuilder::InsertionGuard insertionGuard(nestedBuilder);
+                nestedBuilder.setInsertionPointToStart(ifOp.elseBlock());
+                scf::YieldOp::create(nestedBuilder, nestedLoc, nestedblockArgs);
+            }
+            scf::YieldOp::create(nestedBuilder, nestedLoc, ifOp.getResults());
+        });
+
+    return applyMask;
+}
+
 class FilterOpLowering : public OpConversionPattern<FilterOp> {
     public:
     using OpConversionPattern::OpConversionPattern;
 
     LogicalResult matchAndRewrite(FilterOp Op, OneToNOpAdaptor adaptor,
-                                  ConversionPatternRewriter& rewriter) const final {
+                                  ConversionPatternRewriter& rewriter) const override {
         // Create Mask Op
-        auto identityType = rewriter.getI1Type();
+        auto inputTensors = adaptor.getOperands().front();
+        auto maskOp = genericMaskedTensorOp(Op, rewriter, Op.getLoc(), inputTensors);
+
+        // Get the size of new tensors created from maskedTensor
         auto nrows = Op.getTable().getType().getNrows();
-        auto output = tensor::EmptyOp::create(rewriter, Op.getLoc(), {nrows}, identityType);
-        auto blockArguments = adaptor.getOperands().front();
-
-        auto loopMap = rewriter.getDimIdentityMap();
-        SmallVector<AffineMap> indexingMaps(blockArguments.size() + 1, loopMap);
-        SmallVector<utils::IteratorType> iteratorTypes{utils::IteratorType::parallel};
-
-        auto maskOp = linalg::GenericOp::create(
-            rewriter, Op.getLoc(),
-            TypeRange{output.getType()},
-            blockArguments,
-            ValueRange{output},
-            indexingMaps,
-            iteratorTypes,
-            [&](OpBuilder& nestedBuilder, Location nestedLoc, ValueRange blockArgs) {
-                Block* oldBlock = &Op.getRegion().front();
-                IRMapping mapping;
-                for (auto [oldArg, newArg] : llvm::zip(oldBlock->getArguments(), blockArgs.drop_back())) {
-                    mapping.map(oldArg, newArg);
-                }
-
-                for (auto& innerOp : oldBlock->getOperations()) {
-                    nestedBuilder.clone(innerOp, mapping);
-                }
-            });
-
-        // Filter Yield Op will take care of the yield
-
-        // Apply the mask tensor to the new tensors
-        // Try applying SCF.ForOp to apply the mask on all tensors
+        auto maskedTensor = maskOp.getResult(0);
         auto lowerBound = arith::ConstantIndexOp::create(rewriter, Op.getLoc(), 0);
         auto upperBound = arith::ConstantIndexOp::create(rewriter, Op.getLoc(), nrows);
-        auto stepLoop = arith::ConstantIndexOp::create(rewriter, Op.getLoc(), 1);
-        auto zeroOp = arith::ConstantIndexOp::create(rewriter, Op.getLoc(), 0);
-        auto newTensorSizeLoop = scf::ForOp::create(
-            rewriter, Op.getLoc(),
-            lowerBound,
-            upperBound,
-            stepLoop,
-            ValueRange{zeroOp},
-            [&](OpBuilder& builder, Location loc, Value outerIter, ValueRange iterArgs) {
-                auto maskVal = tensor::ExtractOp::create(builder, loc, maskOp.getResult(0), outerIter);
-                auto nextCount = scf::IfOp::create(builder, loc,
-                                                   TypeRange{stepLoop.getType()},
-                                                   maskVal, true, true);
-                // If Block
-                {
-                    OpBuilder::InsertionGuard insertionGuard(builder);
-                    builder.setInsertionPointToStart(nextCount.thenBlock());
-                    auto updatedIndex = arith::AddIOp::create(builder, loc,
-                                                              stepLoop.getType(),
-                                                              stepLoop, iterArgs.front());
-                    scf::YieldOp::create(builder, loc, updatedIndex.getResult());
-                }
-
-                // Else Block
-                {
-                    OpBuilder::InsertionGuard insertionGuard(builder);
-                    builder.setInsertionPointToStart(nextCount.elseBlock());
-                    scf::YieldOp::create(builder, loc, iterArgs.front());
-                }
-
-                scf::YieldOp::create(builder, loc, nextCount.getResults());
-            });
+        auto step = arith::ConstantIndexOp::create(rewriter, Op.getLoc(), 1);
+        auto newTensorSizeLoop = scfNewTensorSizeLoopFromMask(
+            Op, rewriter, Op.getLoc(),
+            maskedTensor, lowerBound, upperBound, step);
 
         // Create new empty tensor from newTensorSizeLoop result
-        auto inputTensors = adaptor.getOperands().front();
         auto numInputTensors = inputTensors.size();
-        SmallVector<Value> newEmptyTensors{};
-        SmallVector<Type> newEmptyTensorsType{};
-
         auto columns = Op.getTable().getType().getColumns();
-
+        SmallVector<Value> newEmptyTensors{};
+        newEmptyTensors.reserve(numInputTensors);
         for (size_t i{}; i < numInputTensors; ++i) {
             auto columnType = columns[i].getDtype();
-            auto emptyTensor = tensor::EmptyOp::create(rewriter, Op.getLoc(),
-                                                       {newTensorSizeLoop.getResult(0)},
-                                                       columnType);
+            auto emptyTensor = tensor::EmptyOp::create(
+                rewriter, Op.getLoc(),
+                {newTensorSizeLoop.getResult(0)},
+                columnType);
+
             newEmptyTensors.push_back(emptyTensor);
-            newEmptyTensorsType.push_back(columnType);
         }
 
-        newEmptyTensors.push_back(zeroOp);
-
+        // Index for newly created tensors
+        auto newIndex = arith::ConstantIndexOp::create(rewriter, Op.getLoc(), 0);
+        newEmptyTensors.push_back(newIndex);
         // Apply the SCF.ForOp to write values to newEmptyTensors
-        ValueRange iterArgs{newEmptyTensors};
-        auto applyMaskToTensorsLoop = scf::ForOp::create(
-            rewriter, Op.getLoc(),
-            lowerBound, upperBound, stepLoop,
-            iterArgs,
-            [&](OpBuilder& builder, Location loc, Value iter, ValueRange innerIterArgs) {
-                auto maskVal = tensor::ExtractOp::create(builder, loc, maskOp.getResult(0), iter);
-                auto ifResultTypes = innerIterArgs.getTypes();
-                auto finalTensor = scf::IfOp::create(builder, loc,
-                                                     ifResultTypes,
-                                                     maskVal, true, true);
+        ValueRange initArgs{newEmptyTensors};
 
-                // If block
-                {
-                    OpBuilder::InsertionGuard insertionGuard(builder);
-                    builder.setInsertionPointToStart(finalTensor.thenBlock());
-                    SmallVector<Value> innerIfOpResult{};
-                    for (size_t i{}; i < numInputTensors; ++i) {
-                        auto tensorVal = tensor::ExtractOp::create(builder, loc,
-                                                                   inputTensors[i], iter);
-                        auto insertValue = tensor::InsertOp::create(builder, loc,
-                                                                    tensorVal,
-                                                                    innerIterArgs[i],
-                                                                    innerIterArgs.back());
-                        innerIfOpResult.push_back(insertValue);
-                    }
-                    auto updatedIndex = arith::AddIOp::create(builder, loc,
-                                                              stepLoop.getType(),
-                                                              stepLoop,
-                                                              innerIterArgs.back());
-                    innerIfOpResult.push_back(updatedIndex);
-                    scf::YieldOp::create(builder, loc, innerIfOpResult);
-                }
+        auto applyMask = applyMaskToOutputTensors(
+            Op, rewriter, Op.getLoc(),
+            lowerBound, upperBound, step,
+            initArgs, maskedTensor, inputTensors);
 
-                // Else Block
-                {
-                    OpBuilder::InsertionGuard insertionGuard(builder);
-                    builder.setInsertionPointToStart(finalTensor.elseBlock());
-                    scf::YieldOp::create(builder, loc, innerIterArgs);
-                }
-                scf::YieldOp::create(builder, loc, finalTensor.getResults());
-            });
-
-        SmallVector<Value> filteredTensors{};
-        for (size_t i{}; i < numInputTensors; ++i) {
-            filteredTensors.push_back(applyMaskToTensorsLoop.getResult(i));
-        }
-
-        auto castOp = mlir::UnrealizedConversionCastOp::create(
-            rewriter,
-            Op.getLoc(),
-            TypeRange{Op.getType()},
-            filteredTensors);
-
-        rewriter.replaceOp(Op, castOp.getResults());
+        SmallVector<ValueRange> result = {applyMask.getResults().drop_back()};
+        rewriter.replaceOpWithMultiple(Op, result);
         return success();
     }
 };
@@ -218,16 +265,9 @@ class FilterYieldOpLowering : public OpConversionPattern<FilterYieldOp> {
     using OpConversionPattern::OpConversionPattern;
 
     LogicalResult matchAndRewrite(FilterYieldOp Op, OneToNOpAdaptor adaptor,
-                                  ConversionPatternRewriter& rewriter) const final {
-        if (adaptor.getOperands().empty()) { return failure(); }
-
-        auto yieldValue = adaptor.getOperands()[0].front();
-
-        if (auto castOp = yieldValue.getDefiningOp<mlir::UnrealizedConversionCastOp>()) {
-            yieldValue = castOp.getInputs().front();
-        }
-
-        rewriter.replaceOpWithNewOp<linalg::YieldOp>(Op, yieldValue);
+                                  ConversionPatternRewriter& rewriter) const override {
+        rewriter.replaceOpWithNewOp<linalg::YieldOp>(
+            Op, adaptor.getOperands().back());
         return success();
     }
 };
@@ -249,16 +289,14 @@ class CmpIOpLowering : public OpConversionPattern<CmpIOp> {
     using OpConversionPattern::OpConversionPattern;
 
     LogicalResult matchAndRewrite(CmpIOp Op, OneToNOpAdaptor adaptor,
-                                  ConversionPatternRewriter& rewriter) const final {
+                                  ConversionPatternRewriter& rewriter) const override {
         auto lhs = adaptor.getOperands()[0];
         auto rhs = adaptor.getOperands()[1];
 
         auto newPred = translatePredicate(Op.getPredicate());
-        auto compare = arith::CmpIOp::create(rewriter, Op.getLoc(),
-                                             rewriter.getI1Type(),
-                                             newPred,
-                                             lhs[0],
-                                             rhs[0]);
+        auto compare = arith::CmpIOp::create(
+            rewriter, Op.getLoc(),
+            rewriter.getI1Type(), newPred, lhs[0], rhs[0]);
 
         rewriter.replaceOp(Op, compare.getResult());
         return success();
@@ -270,7 +308,7 @@ class OutputOpLowering : public OpConversionPattern<OutputOp> {
     using OpConversionPattern::OpConversionPattern;
 
     LogicalResult matchAndRewrite(OutputOp Op, OneToNOpAdaptor adaptor,
-                                  ConversionPatternRewriter& rewriter) const final {
+                                  ConversionPatternRewriter& rewriter) const override {
         auto tableType = Op.getTable().getType();
         auto selectAttr = Op.getSelectAttr();
         auto tableColumns = tableType.getColumns();
@@ -282,7 +320,7 @@ class OutputOpLowering : public OpConversionPattern<OutputOp> {
             selectedNames.insert(colName);
         }
 
-        SmallVector<Value> outputTensors{};
+        SmallVector<ValueRange> outputTensors{};
         for (auto [idx, valRange] : llvm::enumerate(inputTensors)) {
             if (selectedNames.contains(tableColumns[idx].getName())) {
                 outputTensors.push_back(valRange.front());
@@ -290,47 +328,6 @@ class OutputOpLowering : public OpConversionPattern<OutputOp> {
         }
 
         rewriter.replaceOpWithMultiple(Op, outputTensors);
-        return success();
-    }
-};
-
-class DecomposeFuncOp : public OpConversionPattern<func::FuncOp> {
-    public:
-    using OpConversionPattern::OpConversionPattern;
-
-    LogicalResult matchAndRewrite(func::FuncOp Op, OpAdaptor adaptor,
-                                  ConversionPatternRewriter& rewriter) const final {
-        auto converter = *getTypeConverter();
-        TypeConverter::SignatureConversion sigConversion(Op.getFunctionType().getNumInputs());
-
-        SmallVector<Type> newArgs{};
-        auto funcInputs = Op.getFunctionType().getInputs();
-        for (auto [idx, arg] : llvm::enumerate(funcInputs)) {
-            SmallVector<Type> expanedArgs{};
-
-            if (failed(converter.convertType(arg, expanedArgs))) {
-                return failure();
-            }
-
-            sigConversion.addInputs(idx, expanedArgs);
-            newArgs.append(expanedArgs.begin(), expanedArgs.end());
-        }
-
-        SmallVector<Type> newResults{};
-        for (auto resType : Op.getFunctionType().getResults()) {
-            auto result = converter.convertType(resType);
-            if (!result) { return failure(); }
-            newResults.push_back(result);
-        }
-
-        auto newFuncType = FunctionType::get(Op.getContext(), newArgs, newResults);
-        auto newFunc = func::FuncOp::create(rewriter, Op.getLoc(), Op.getName(), newFuncType);
-
-        newFunc.setVisibility(Op.getVisibility());
-        rewriter.inlineRegionBefore(Op.getRegion(), newFunc.getRegion(), newFunc.end());
-        rewriter.applySignatureConversion(&newFunc.getBody().front(), sigConversion);
-
-        rewriter.eraseOp(Op);
         return success();
     }
 };
@@ -364,7 +361,6 @@ struct DBToTensor : impl::DBToTensorBase<DBToTensor> {
         });
 
         RewritePatternSet patterns(ctx);
-        patterns.add<DecomposeFuncOp>(converter, ctx);
         patterns.add<ScanOpLowering>(converter, ctx);
         patterns.add<CmpIOpLowering>(converter, ctx);
         patterns.add<FilterOpLowering, FilterYieldOpLowering>(converter, ctx);
