@@ -15,6 +15,7 @@ void KeroRegisterAllDialects(MlirContext context) {
     mlir::DialectRegistry registry;
     mlir::registerAllDialects(registry);
     registry.insert<mlir::db::DBDialect>();
+    mlir::registerConvertToLLVMDependentDialectLoading(registry);
     unwrap(context)->appendDialectRegistry(registry);
 }
 void KeroRegisterAllPasses() {

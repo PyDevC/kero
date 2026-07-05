@@ -401,7 +401,6 @@ class TestAstToKeroConverter(TestCase):
         with self.location, ir.InsertionPoint(block):
             func.return_([out])
         db_to_llvm_lowering(self.module, self.context)
-        self.module.dump()
 
 
 class TestFullPipeline(TestCase):

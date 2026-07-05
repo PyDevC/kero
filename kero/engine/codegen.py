@@ -160,6 +160,7 @@ def db_to_llvm_lowering(module, context):
     with context:
         pm = PassManager.parse(
             "builtin.module("
+            "db-to-tensor-and-linalg,"
             "one-shot-bufferize{bufferize-function-boundaries=true},"
             "convert-linalg-to-loops,"
             "expand-strided-metadata,"
@@ -172,4 +173,4 @@ def db_to_llvm_lowering(module, context):
         )
         pm.run(module.operation)
 
-    return module
+        return module, context

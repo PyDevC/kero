@@ -20,7 +20,12 @@ class KeroEngine:
             pointer_inputs = self.get_input_from_data(data, inputs)
             pointer_outputs = self.get_pointers_from_output(outputs)
 
-            self.executor.invoke(query_name, *pointer_inputs, *pointer_outputs)
+            self.executor.invoke(
+                query_name, 
+                *[ctypes.byref(p) for p in pointer_outputs],
+                *[ctypes.byref(p) for p in pointer_inputs])
+
+            return pointer_outputs
 
     def get_input_from_data(self, data: Dataset, inputs):
         pointer_inputs = []
