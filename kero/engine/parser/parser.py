@@ -70,7 +70,7 @@ class GlotToDB:
         if where_clause:
             where_operations = self._parse_where_clause(where_clause)
             filter_op = self._parse_filter_op(select_op.table, output_op.output, where_operations)
-            return (select_op, output_op, filter_op)
+            return (select_op, filter_op, output_op)
 
         return (select_op, output_op)
 

@@ -31,7 +31,7 @@ class TestGlotToDB(TestCase):
         converter = GlotToDB("SELECT * FROM person WHERE age > 10")
         result = converter.convert()
         self.assertEqual(len(result), 3)
-        scan, output, filter_op = result
+        scan, filter_op, output = result
         self.assertIsInstance(filter_op, FilterOp)
 
         cmp_op = filter_op.region.operations
@@ -44,7 +44,7 @@ class TestGlotToDB(TestCase):
         converter = GlotToDB("SELECT name FROM person WHERE age = 20")
         result = converter.convert()
         self.assertEqual(len(result), 3)
-        scan, output, filter_op = result
+        scan, filter_op, output = result
 
         col_names = [c.metadata.metadata["name"] for c in scan.table.columns]
         self.assertEqual(col_names, ["name"])
@@ -67,7 +67,7 @@ class TestGlotToDB(TestCase):
             query = f"SELECT * FROM person WHERE age {op_str} 5"
             converter = GlotToDB(query)
             result = converter.convert()
-            _, _, filter_op = result
+            _, filter_op, _ = result
             cmp_op = filter_op.region.operations
             self.assertEqual(cmp_op.predicate, pred, f"failed for {op_str}")
 
@@ -141,7 +141,7 @@ class TestParserFullPipeline(TestCase):
         parser = Parser(dataset)
         result = parser.parse("SELECT age FROM employee WHERE age > 10")
         self.assertEqual(len(result), 3)
-        scan, output, filter_op = result
+        scan, filter_op, output = result
 
         self.assertEqual(scan.table.columns[0].metadata.metadata["dtype"], "i32")
         cmp_op = filter_op.region.operations
@@ -152,7 +152,7 @@ class TestParserFullPipeline(TestCase):
         dataset = sample.all_number_dataset()
         parser = Parser(dataset)
         result = parser.parse("SELECT age, salary FROM employee WHERE age > 10")
-        _, output, filter_op = result
+        _, filter_op, output = result
 
         for col_attr in output.output.columns:
             self.assertIsNotNone(col_attr.metadata.metadata["dtype"])
@@ -164,7 +164,7 @@ class TestParserFullPipeline(TestCase):
         dataset = sample.toy_school_dataset()
         parser = Parser(dataset)
         result = parser.parse("SELECT age FROM person WHERE age > 10")
-        scan, output, filter_op = result
+        scan, filter_op, output = result
 
         age_col = scan.table.columns[0]
         self.assertEqual(age_col.metadata.metadata["dtype"], "i8")

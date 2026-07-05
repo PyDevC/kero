@@ -80,9 +80,24 @@ def resolve_dbfilter_op(dataset: Dataset, node: dbast.FilterOp):
 
 def resolve_dboutput_op(dataset: Dataset, node: dbast.OutputOp):
     input_table = node.input
-    for col_attr, in_col_attr in zip(node.output.columns, input_table.columns):
-        col_attr.metadata.metadata["dtype"] = in_col_attr.metadata.metadata["dtype"]
-        col_attr.metadata.metadata["nrows"] = in_col_attr.metadata.metadata["nrows"]
+    output_table = node.output
+
+    if output_table.columns and output_table.columns[0].metadata.metadata.get("is_star", False):
+        new_columns = []
+        for in_col in input_table.columns:
+            col_attr = dbast.DBColumnAttr(dbast.Metadata())
+            col_attr.metadata.metadata["name"] = in_col.metadata.metadata["name"]
+            col_attr.metadata.metadata["dtype"] = in_col.metadata.metadata["dtype"]
+            col_attr.metadata.metadata["nrows"] = in_col.metadata.metadata["nrows"]
+            col_attr.metadata.metadata["is_star"] = False
+            new_columns.append(col_attr)
+        output_table.columns = new_columns
+        output_table.metadata.metadata["ncols"] = len(input_table.columns)
+        output_table.metadata.metadata["nrows"] = input_table.metadata.metadata.get("nrows", 0)
+    else:
+        for col_attr, in_col_attr in zip(output_table.columns, input_table.columns):
+            col_attr.metadata.metadata["dtype"] = in_col_attr.metadata.metadata["dtype"]
+            col_attr.metadata.metadata["nrows"] = in_col_attr.metadata.metadata["nrows"]
 
 
 def resolve_dbcmpi_op(dataset: Dataset, node: dbast.CmpIOp):
