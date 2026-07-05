@@ -40,8 +40,9 @@ class DBColumnAttr:
         return f'#db.column<{self.metadata.metadata["name"]}, {self.metadata.metadata["dtype"]} : [{self.metadata.metadata["nrows"]}]>'
 
 class DBColumn:
-    def __init__(self, dtype: str):
+    def __init__(self, dtype: str, name: str = ""):
         self.dtype = dtype
+        self.name = name
 
     def __repr__(self) -> str:
         return f'!db.column<{self.dtype}>'

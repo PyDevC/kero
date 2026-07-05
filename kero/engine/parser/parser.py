@@ -16,8 +16,19 @@ class Parser:
         self.dataset = dataset
 
     def parse(self, query: str) -> DB_Ast:
+        q_ast = self.only_parse(query)
+        q_ast = self.type_resolve_ast(q_ast)
+        return q_ast
+
+    def only_parse(self, query: str) -> DB_Ast:
         converter = GlotToDB(query)
         return converter.convert()
+
+    def type_resolve_ast(self, q_ast: DB_Ast) -> DB_Ast:
+        for node in q_ast:
+            resolve.resolve_node(self.dataset, node)
+
+        return q_ast
 
 ## Parser and Converter Exceptions
 class BaseParserException(Exception): ...
@@ -165,10 +176,15 @@ class GlotToDB:
         return self._parse_exp_cmp(glotnode, "gte")
 
     def _parse_exp_literal(self, glotnode: exp.Literal) -> DBLiteral:
-        return DBLiteral(glotnode.this)
+        try: 
+            number = int(glotnode.this)
+        except ValueError:
+            number = float(glotnode.this)
+
+        return DBLiteral(number)
 
     def _parse_exp_column(self, glotnode: exp.Column) -> DBColumn:
-        return DBColumn("None")
+        return DBColumn("None", glotnode.name)
 
     # Parse Operations
     def _parse_scan_op(self, glotnode: exp.Select) -> ScanOp:

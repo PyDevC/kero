@@ -1,11 +1,12 @@
-import pyarrow as pa
-
 import typing as t
 
-import kero._engine._kero.ir as ir
+import pyarrow as pa
 
+from kero.arrow.data import Dataset
+from kero.engine.parser import dbast
+from kero.arrow.exce import NodeTypeResolveException
 
-PYARROW_TO_DB_TYPES = {
+PYARROW_TO_DB_TYPES: t.Dict[pa.DataType, str] = {
     # Integer Types
     pa.int8(): "i8",
     pa.int16(): "i16",
@@ -16,57 +17,85 @@ PYARROW_TO_DB_TYPES = {
     pa.float16(): "f16",
     pa.float32(): "f32",
     pa.float64(): "f64",
-
-    # String Types
-    pa.string(): ir.StringAttr,
 }
 
-class DBOps:
-    def __init__(
-            self, 
-            id, 
-            inputs: t.Optional[t.List['DBOps']] = None, 
-            outputs: t.Optional[t.List['DBOps']] = None, 
-            attribute=None
-    ):
-        self.id = id
-        self.inputs = inputs or []
-        self.attribute = attribute
-        self.outputs = outputs or []
+def resolve_node(dataset: Dataset, node):
+    resolve_func = NODE_RESOLVE_MAP.get(type(node))
+    if resolve_func is not None:
+        return resolve_func(dataset, node)
 
-class DBTypes: ...
-    
-class Column(DBTypes):
-    def __init__(self, name: str, dtype: DBTypes, nrows: int):
-        self.name = name
-        self.dtype = dtype
-        self.nrows = nrows
+    raise NodeTypeResolveException(
+        f"node can't be resolved, unknown node type: {type(node)}"
+    )
 
-    def __repr__(self):
-        return f'#db.column<"{self.name}", {self.dtype}, {self.nrows}>'
+         
+def resolve_dbtable(dataset: Dataset, node: dbast.DBTable):
+    table_name = node.metadata.metadata["name"]
+    table = dataset.get_table(table_name)
+    node.metadata.metadata["ncols"] = table.num_columns
+    node.metadata.metadata["nrows"] = table.num_rows
 
-class Table(DBTypes):
-    def __init__(self, name: str, columns: t.Dict[str, Column], ncols: int, nrows: int):
-        self.name = name
-        self.columns = columns
-        self.ncols = ncols
-        self.nrows = nrows
-
-    def __repr__(self):
-        return f'!db.table<{self.ncols}, {self.nrows} : [{", ".join([repr(column) for column in self.columns.values()])}]>'
-
-
-def resolve_table(table: pa.Table, node):
-    """Resolve table with some columns and ncols and nrows"""
     schema = table.schema
-    ncols = table.num_columns
-    nrows = table.num_rows
-    columns = {}
-    for field in schema:
-        columns[field.name] = Column(field.name, field.type, nrows)
+    columnattr = node.columns
+    if columnattr[0].metadata.metadata["is_star"]:
+        new_columnattr = []
+        node.columns.clear()
+        for field in schema:
+            metadata = dbast.Metadata()
+            metadata.metadata["name"] = field.name
+            metadata.metadata["dtype"] = PYARROW_TO_DB_TYPES[field.type]
+            metadata.metadata["nrows"] = table.num_rows
+            new_columnattr.append(dbast.DBColumnAttr(metadata))
 
-    node.columns = columns
-    node.nrows = nrows
-    node.ncols = ncols
+        node.columns = new_columnattr
+        return
 
-    return node
+    for column in node.columns:
+        col_name = column.metadata.metadata["name"]
+        field = schema.field(col_name)
+        column.metadata.metadata["dtype"] = PYARROW_TO_DB_TYPES[field.type]
+        column.metadata.metadata["nrows"] = table.num_rows
+
+
+def resolve_dbcolumn(dataset: Dataset, node: dbast.DBColumn):
+    if not node.name:
+        return
+    for table_name in dataset.tables:
+        table = dataset.tables[table_name]
+        schema = table.schema
+        if node.name in schema.names:
+            field = schema.field(node.name)
+            node.dtype = PYARROW_TO_DB_TYPES[field.type]
+            return
+
+
+def resolve_dbscan_op(dataset: Dataset, node: dbast.ScanOp):
+    resolve_dbtable(dataset, node.table)
+
+
+def resolve_dbfilter_op(dataset: Dataset, node: dbast.FilterOp):
+    resolve_dbcmpi_op(dataset, node.region.operations)
+    resolve_dbcolumn(dataset, node.region.f_yield.mask)
+
+
+def resolve_dboutput_op(dataset: Dataset, node: dbast.OutputOp):
+    input_table = node.input
+    for col_attr, in_col_attr in zip(node.output.columns, input_table.columns):
+        col_attr.metadata.metadata["dtype"] = in_col_attr.metadata.metadata["dtype"]
+        col_attr.metadata.metadata["nrows"] = in_col_attr.metadata.metadata["nrows"]
+
+
+def resolve_dbcmpi_op(dataset: Dataset, node: dbast.CmpIOp):
+    resolve_dbcolumn(dataset, node.lhs)
+    node.output.dtype = "bool"
+
+
+NODE_RESOLVE_MAP = {
+    dbast.DBTable: resolve_dbtable,
+    dbast.DBColumn: resolve_dbcolumn,
+    dbast.ScanOp: resolve_dbscan_op,
+    dbast.FilterOp: resolve_dbfilter_op,
+    dbast.OutputOp: resolve_dboutput_op,
+    dbast.CmpIOp: resolve_dbcmpi_op
+}
+
