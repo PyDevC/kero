@@ -23,10 +23,10 @@ def toy_school_dataset() -> data.Dataset:
     
     return data.Dataset(tables)
 
-def all_number_dataset() -> data.Dataset:
-    age = np.random.randint(10, 80, size=(100,), dtype=np.int32)
-    salary = np.random.randint(10000, 80000, size=(100,), dtype=np.int32)
-    spendings = np.random.randint(10000, 90000, size=(100,), dtype=np.int32)
+def all_number_dataset(size=100) -> data.Dataset:
+    age = np.random.randint(10, 80, size=(size,), dtype=np.int32)
+    salary = np.random.randint(10000, 80000, size=(size,), dtype=np.int32)
+    spendings = np.random.randint(10000, 90000, size=(size,), dtype=np.int32)
 
     emp_dict = {
         "age": age,

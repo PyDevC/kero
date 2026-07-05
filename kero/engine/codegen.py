@@ -174,3 +174,9 @@ def db_to_llvm_lowering(module, context):
         pm.run(module.operation)
 
         return module, context
+
+def db_to_tensor(module, context):
+    with context:
+        pm = PassManager.parse("builtin.module(db-to-tensor-and-linalg)")
+        pm.run(module.operation)
+        return module, context
