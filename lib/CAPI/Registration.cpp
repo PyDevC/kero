@@ -9,6 +9,7 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
+#include "mlir/Target/LLVMIR/Dialect/All.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 void KeroRegisterAllDialects(MlirContext context) {
@@ -16,9 +17,9 @@ void KeroRegisterAllDialects(MlirContext context) {
     mlir::registerAllDialects(registry);
     registry.insert<mlir::db::DBDialect>();
     mlir::registerConvertToLLVMDependentDialectLoading(registry);
+    mlir::registerAllToLLVMIRTranslations(registry);
     unwrap(context)->appendDialectRegistry(registry);
 }
 void KeroRegisterAllPasses() {
-    mlir::registerAllPasses();
     mlir::db::registerDBToTensorPasses();
 }
