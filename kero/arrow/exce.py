@@ -9,3 +9,5 @@ class TableNotFoundException(ArrowUtilsException):
 class NodeTypeResolveException(ArrowUtilsException):
     def __init__(self, message):
         super().__init__(message)
+
+class TableAlreadyInDataset(ArrowUtilsException): ...
