@@ -4,6 +4,7 @@ from kero.engine import _keroEngine
 import kero._engine._kero.ir as ir
 
 from .parser.dbast import *
+from .parser.parser import DB_Ast
 
 import typing as t
 import pyarrow as pa
@@ -48,13 +49,14 @@ def convert_dtype(dtype):
 
 
 class IRGen:
-    def __init__(self, query_name: str, operations):
+    def __init__(self, query_name: str, operations: DB_Ast):
         self.operations = operations
         self.context = ir.Context()
         self.loc = ir.Location.unknown(self.context)
         self.module = ir.Module.create(self.loc)
         self.func_name = query_name
         self.generator = None
+        self.func_result_num = 0
         _keroEngine.register_dialect(self.context)
 
     def emit_ir(self):
@@ -62,6 +64,7 @@ class IRGen:
             with self.loc, ir.InsertionPoint(self.module.body):
                 first_op = self.operations[0]
                 last_op = self.operations[-1]
+                self.func_result_num = last_op.output.metadata.metadata["num_cols"]
 
                 in_table_t = make_dbtable_type(first_op.input, self.context)
                 out_table_t = make_dbtable_type(last_op.output, self.context)
