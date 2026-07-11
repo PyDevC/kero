@@ -11,11 +11,11 @@ class TestMakeDBTypes(TestCase):
         dataset = all_number_dataset()
         parser = Parser(dataset)
         operations = parser.parse("SELECT age, salary FROM employee")
-        scan_op = operations[0]
+        output_op = operations[1]
 
         ctx = ir.Context()
         _keroEngine.register_dialect(ctx)
-        t = make_dbtable_type(scan_op.table, ctx)
+        t = make_dbtable_type(output_op.output, ctx)
         self.assertEqual(
             str(t),
             '!db.table<2, 100 : [<"age", i32, 100>, <"salary", i32, 100>]>',
@@ -52,28 +52,10 @@ class TestMakeDBTypes(TestCase):
 
         ctx = ir.Context()
         _keroEngine.register_dialect(ctx)
-        t = make_dbtable_type(scan_op.table, ctx)
+        t = make_dbtable_type(scan_op.input, ctx)
         self.assertEqual(
             str(t),
             '!db.table<3, 100 : [<"age", i32, 100>, <"salary", i32, 100>, <"spendings", i32, 100>]>',
-        )
-
-    def test_make_dbtable_type_toy_school(self):
-        from kero.engine import _keroEngine, Parser
-        from kero._engine._kero import ir
-        from kero.engine.codegen import make_dbtable_type
-        from kero.arrow.samples import toy_school_dataset
-
-        dataset = toy_school_dataset()
-        parser = Parser(dataset)
-        operations = parser.parse("SELECT age FROM person")
-        scan_op = operations[0]
-
-        ctx = ir.Context()
-        _keroEngine.register_dialect(ctx)
-        t = make_dbtable_type(scan_op.table, ctx)
-        self.assertEqual(
-            str(t), '!db.table<1, 5 : [<"age", i8, 5>]>'
         )
 
     def test_make_dbcolumn_type(self):
@@ -103,10 +85,10 @@ class TestIRGen(TestCase):
         from kero.arrow.samples import all_number_dataset
 
         dataset = all_number_dataset()
-        par = Parser(dataset)
-        operations = par.parse("select salary, spendings from employee")
+        parser = Parser(dataset)
+        operations = parser.parse("select salary, spendings from employee")
 
-        irgen = codegen.IRGen("salary_of_person", operations)
+        irgen = codegen.IRGen("salary_of_employee", operations)
         irgen.emit_ir()
 
     def test_select_single_column(self):
@@ -252,17 +234,10 @@ class TestAstToKeroConverter(TestCase):
 
         first = operations[0]
         last = operations[-1]
-        has_filter = any(isinstance(op, FilterOp) for op in operations)
 
-        if isinstance(first, ScanOp):
-            in_t = make_dbtable_type(first.table, self.context)
-        else:
-            in_t = make_dbtable_type(first.input, self.context)
+        in_t = make_dbtable_type(first.input, self.context)
 
-        if isinstance(last, FilterOp) or isinstance(last, OutputOp):
-            out_t = make_dbtable_type(last.output, self.context, dynamic_rows=has_filter)
-        else:
-            out_t = make_dbtable_type(last.table, self.context)
+        out_t = make_dbtable_type(last.output, self.context)
 
         with self.location, ir.InsertionPoint(self.module.body):
             ftype = ir.FunctionType.get(inputs=[in_t], results=[out_t])
@@ -317,42 +292,11 @@ class TestAstToKeroConverter(TestCase):
             with self.subTest(predicate=pred):
                 ops = parser.parse(query)
                 block, _ = self.generate_func_block(ops)
-                generator = AstToKeroConverter(
-                    self.context, self.location, self.module, block, has_filter=True
-                )
+                generator = AstToKeroConverter(self.context, self.location, self.module, block)
                 out = block.arguments[0]
                 for op in ops:
                     out = generator.resolve_node(op, out)
                 self.assertIsNotNone(out)
-
-    def test_toy_school_filter_chain(self):
-        from kero.engine.codegen import AstToKeroConverter
-        from kero.engine.codegen import make_dbtable_type
-        from kero._engine._kero.dialects import func
-        import kero._engine._kero.ir as ir
-        from kero.engine import Parser
-        from kero.arrow.samples import toy_school_dataset
-
-        dataset = toy_school_dataset()
-        parser = Parser(dataset)
-        ops = parser.parse("SELECT age FROM person WHERE age > 10")
-
-        with self.location, ir.InsertionPoint(self.module.body):
-            in_t = make_dbtable_type(ops[0].table, self.context)
-            out_t = make_dbtable_type(ops[-1].output, self.context, dynamic_rows=True)
-            ftype = ir.FunctionType.get(
-                inputs=[in_t], results=[out_t]
-            )
-            func_op = func.FuncOp("person_age_gt_10", ftype)
-            entry_block = ir.Block.create_at_start(
-                func_op.body, ftype.inputs
-            )
-            generator = AstToKeroConverter(
-                self.context, self.location, self.module, entry_block, has_filter=True
-            )
-            out = entry_block.arguments[0]
-            for op in ops:
-                out = generator.resolve_node(op, out)
 
     def test_output_type_matches_function_result(self):
         from kero.engine.codegen import AstToKeroConverter
@@ -369,8 +313,8 @@ class TestAstToKeroConverter(TestCase):
         )
 
         with self.location, ir.InsertionPoint(self.module.body):
-            in_t = make_dbtable_type(ops[0].table, self.context)
-            out_t = make_dbtable_type(ops[-1].output, self.context, dynamic_rows=True)
+            in_t = make_dbtable_type(ops[0].input, self.context)
+            out_t = make_dbtable_type(ops[-1].output, self.context)
             ftype = ir.FunctionType.get(
                 inputs=[in_t], results=[out_t]
             )
@@ -378,9 +322,7 @@ class TestAstToKeroConverter(TestCase):
             entry_block = ir.Block.create_at_start(
                 func_op.body, ftype.inputs
             )
-            generator = AstToKeroConverter(
-                self.context, self.location, self.module, entry_block, has_filter=True
-            )
+            generator = AstToKeroConverter(self.context, self.location, self.module, entry_block)
             out = entry_block.arguments[0]
             for op in ops:
                 out = generator.resolve_node(op, out)
@@ -392,9 +334,7 @@ class TestAstToKeroConverter(TestCase):
         from kero._engine._kero.dialects import func
 
         block, _ = self.generate_func_block(self.ops_with_where)
-        generator = AstToKeroConverter(
-            self.context, self.location, self.module, block, has_filter=True
-        )
+        generator = AstToKeroConverter(self.context, self.location, self.module, block)
         out = block.arguments[0]
         for op in self.ops_with_where:
             out = generator.resolve_node(op, out)
@@ -421,7 +361,7 @@ class TestFullPipeline(TestCase):
         dataset = all_number_dataset()
         par = Parser(dataset)
         ops = par.parse(
-            "SELECT salary FROM employee WHERE salary > 50000"
+            "SELECT age FROM employee WHERE salary > 50000"
         )
         irgen = codegen.IRGen("roundtrip_filter", ops)
         irgen.emit_ir()
