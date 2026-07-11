@@ -19,6 +19,5 @@ void KeroRegisterAllDialects(MlirContext context) {
     unwrap(context)->appendDialectRegistry(registry);
 }
 void KeroRegisterAllPasses() {
-    mlir::registerAllPasses();
     mlir::db::registerDBToTensorPasses();
 }
