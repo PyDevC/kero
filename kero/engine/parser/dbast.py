@@ -5,8 +5,8 @@ class Metadata:
     Metadata holds necessary information about a type of which it's part of.
 
     For Tables metadata has: 
-        - ncols: number of columns
-        - nrows: number of rows
+        - num_cols: number of columns
+        - num_rows: number of rows
         - columns: names of columns
 
     You can add or remove any information from the metadata and just need to check 
@@ -28,19 +28,23 @@ class DBTable:
     def __init__(self, metadata: Metadata, columns: List["DBColumnAttr"]) -> None:
         self.metadata = metadata
         self.columns = columns
+        self.map = dict(zip(self.metadata.metadata["column_names"], self.metadata.metadata["column_dtypes"]))
+
+    def get_column_dtype(self, column_name):
+        return self.map[column_name]
 
     def __repr__(self) -> str:
-        return f'!db.table<{self.metadata.metadata["ncols"]}, {self.metadata.metadata["nrows"]} : [{", ".join((repr(col) for col in self.columns))}]>'
+        return f'!db.table<{self.metadata.metadata["num_cols"]}, {self.metadata.metadata["num_rows"]} : [{", ".join((repr(col) for col in self.columns))}]>'
 
 class DBColumnAttr:
     def __init__(self, metadata: Metadata):
         self.metadata = metadata
 
     def __repr__(self) -> str:
-        return f'#db.column<{self.metadata.metadata["name"]}, {self.metadata.metadata["dtype"]} : [{self.metadata.metadata["nrows"]}]>'
+        return f'#db.column<{self.metadata.metadata["column_name"]}, {self.metadata.metadata["column_dtype"]}, {self.metadata.metadata["num_rows"]}>'
 
 class DBColumn:
-    def __init__(self, dtype: str, name: str = ""):
+    def __init__(self, dtype, name: str = ""):
         self.dtype = dtype
         self.name = name
 
@@ -55,20 +59,21 @@ class DBCmpIPredicate:
         return f'{self.predicate}'
 
 class DBRegion:
-    def __init__(self, operations: "CmpIOp", f_yield: "FilterYieldOp"):
+    def __init__(self, block_args: List[DBColumn], operations: "CmpIOp", f_yield: "FilterYieldOp"):
+        self.block_args = block_args
         self.operations = operations
         self.f_yield = f_yield
 
     def __repr__(self) -> str:
-        return f'{self.operations}\n{self.f_yield}\n'
+        return f'args: ({self.block_args}):\n{self.operations}\n{self.f_yield}\n'
 
 ## Statements
 class ScanOp:
-    def __init__(self, table: DBTable) -> None:
-        self.table = table
+    def __init__(self, input: DBTable) -> None:
+        self.input = input
 
     def __repr__(self) -> str:
-        return f'db.scan %{self.table.metadata.metadata["name"]} : {self.table} -> {self.table}\n'
+        return f'db.scan %{self.input.metadata.metadata["name"]} : {self.input} -> {self.input}\n'
 
 class OutputOp:
     def __init__(self, input: DBTable, output: DBTable, select: List[str]) -> None:

@@ -57,7 +57,7 @@ class Dataset:
 
         self.__setitem__(name, table)
 
-    def get_table_as_arrays(self, name: str) -> Generator[np.ndarray]:
+    def get_table_as_arrays(self, name: str) -> Generator[np.ndarray, None, None]:
         return (col.to_numpy() for col in self._get_table(name).columns)
 
     def get_table_metadata(self, name: str) -> dict[str, Any]:
@@ -76,6 +76,7 @@ class Dataset:
         column_names= [field.name for field in schema]
 
         return {
+            "name": name,
             "num_rows": num_rows,
             "num_cols": num_cols,
             "column_dtypes": column_dtypes,
