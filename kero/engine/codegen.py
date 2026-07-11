@@ -4,8 +4,23 @@ from kero.engine import _keroEngine
 import kero._engine._kero.ir as ir
 
 from .parser.dbast import *
-from kero.arrow.type_resolve import PYARROW_TO_DB_TYPES
 
+import typing as t
+import pyarrow as pa
+
+
+PYARROW_TO_DB_TYPES: t.Dict[pa.DataType, str] = {
+    # Integer Types
+    pa.int8(): "i8",
+    pa.int16(): "i16",
+    pa.int32(): "i32",
+    pa.int64(): "i64",
+
+    # Floating Types
+    pa.float16(): "f16",
+    pa.float32(): "f32",
+    pa.float64(): "f64",
+}
 
 def make_dbtable_type(node: DBTable, context):
     table_metadata = node.metadata.metadata
