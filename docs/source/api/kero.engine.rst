@@ -1,42 +1,27 @@
 kero.engine package
 ===================
 
-.. automodule:: kero.engine
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 Subpackages
 -----------
 
 .. toctree::
    :maxdepth: 4
 
-   kero.engine.operations
+   kero.engine.parser
 
 Submodules
 ----------
 
-kero.engine.compiler module
----------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: kero.engine.compiler
-   :members:
-   :show-inheritance:
-   :undoc-members:
+   kero.engine.codegen
+   kero.engine.execution
 
-kero.engine.executor module
----------------------------
+Module contents
+---------------
 
-.. automodule:: kero.engine.executor
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-kero.engine.queryparser module
-------------------------------
-
-.. automodule:: kero.engine.queryparser
+.. automodule:: kero.engine
    :members:
    :show-inheritance:
    :undoc-members:

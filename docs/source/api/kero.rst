@@ -1,26 +1,27 @@
 kero package
 ============
 
-.. automodule:: kero
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 Subpackages
 -----------
 
 .. toctree::
    :maxdepth: 4
 
+   kero.arrow
    kero.engine
 
 Submodules
 ----------
 
-kero.tensors module
--------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: kero.tensors
+   kero.tensors
+
+Module contents
+---------------
+
+.. automodule:: kero
    :members:
    :show-inheritance:
    :undoc-members:
