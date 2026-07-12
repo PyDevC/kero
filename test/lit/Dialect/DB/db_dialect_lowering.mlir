@@ -1,51 +1,25 @@
 // RUN: kero-opt -db-to-tensor-and-linalg %s | FileCheck %s
 
+!table = !db.table<2, 100 : [#db.column<"age", i32, 100>, #db.column<"budget", i32, 100>]>
+!new_table = !db.table<2, -1: [ #db.column<"age", i32, -1>, #db.column<"salary", i32, -1>]>
+
+
 // -----
 // CHECK-LABEL: func.func @lower_scan_op(
 // CHECK-SAME:    %[[ARG0:.*]]: tensor<100xi32>, %[[ARG1:.*]]: tensor<100xi32>
 // CHECK-SAME:    -> (tensor<100xi32>, tensor<100xi32>)
 // CHECK-NEXT:    return %[[ARG0]], %[[ARG1]] : tensor<100xi32>, tensor<100xi32>
-func.func @lower_scan_op(
-    %arg0: !db.table<2, 100 : [
-        #db.column<"age", i32, 100>,
-        #db.column<"budget", i32, 100>
-    ]>) -> (!db.table<2, 100 : [
-        #db.column<"age", i32, 100>, 
-        #db.column<"budget", i32, 100>
-    ]>) {
-
-    %user = db.scan %arg0 : !db.table<2, 100 : [
-        #db.column<"age", i32, 100>,
-        #db.column<"budget", i32, 100>]>
-        -> !db.table<2, 100 : [
-        #db.column<"age", i32, 100>,
-        #db.column<"budget", i32, 100>]>
-
-    return %user : !db.table<2, 100 : [
-        #db.column<"age", i32, 100>,
-        #db.column<"budget", i32, 100>]>
+func.func @lower_scan_op(%arg0: !table) -> !table {
+    %user = db.scan %arg0 : !table -> !table
+    return %user : !table
 }
 
 // -----
 // CHECK-LABEL: func.func @lower_output_op(
-// CHECK-SAME:    %[[ARG0:.*]]: {{.*}}, %[[ARG1:.*]]: {{.*}}, %[[ARG2:.*]]: {{.*}}
+// CHECK-SAME:    %[[ARG0:.*]]: {{.*}}, %[[ARG1:.*]]: {{.*}}
 // CHECK-NEXT:    return %[[ARG0]] : {{.*}}
-func.func @lower_output_op(
-    %arg0: !db.table<3, 100 : [
-        #db.column<"age", i32, 100>,
-        #db.column<"salary", i32, 100>,
-        #db.column<"budget", i32, 100>
-    ]> ) -> (
-    !db.table<1, 100 : [
-        #db.column<"age", i32, 100>
-    ]>) {
-
-    %selected = db.output { select = ["age"] } %arg0 
-        : !db.table<3, 100 : [
-            #db.column<"age", i32, 100>,
-            #db.column<"salary", i32, 100>,
-            #db.column<"budget", i32, 100>
-        ]>
+func.func @lower_output_op(%arg0: !table) -> (!db.table<1, 100 : [#db.column<"age", i32, 100>]>) {
+    %selected = db.output { select = ["age"] } %arg0 : !table
         -> !db.table<1, 100 : [#db.column<"age", i32, 100>]>
     return %selected : !db.table<1, 100 : [#db.column<"age", i32, 100>]>
 }
@@ -86,34 +60,60 @@ func.func @lower_output_op(
 // CHECK:           } else {
 // CHECK:             scf.yield %[[A0]], %[[A1]]
 // CHECK:         return %[[RES]]#0, %[[RES]]#1 : tensor<?xi32>, tensor<?xi32>
-func.func @lower_filter_op(
-    %arg0: !db.table<2, 100 : [
-        #db.column<"age", i32, 100>,
-        #db.column<"salary", i32, 100>
-    ]> ) -> (
-    !db.table<2, -1 : [
-        #db.column<"age", i32, -1>,
-        #db.column<"salary", i32, -1>
-    ]>) {
-
-    %filtered = db.filter %arg0 
-        : !db.table<2, 100 : [
-            #db.column<"age", i32, 100>,
-            #db.column<"salary", i32, 100>
-        ]> {
+func.func @lower_filter_op(%arg0: !table) -> (!new_table) {
+    %filtered = db.filter %arg0 : !table {
         ^bb0(%age: !db.column<i32>, %salary: !db.column<i32>):
             %c0 = arith.constant 10 : i32
             %0 = db.cmpi eq, %salary, %c0 : (!db.column<i32>, i32) -> !db.column<i1>
-
             db.filter_yield %0 : !db.column<i1>
 
-        } -> (!db.table<2, -1: [
-            #db.column<"age", i32, -1>,
-            #db.column<"salary", i32, -1>
-        ]>)
+        } -> (!new_table)
+    return %filtered : !new_table
+}
 
-    return %filtered : !db.table<2, -1: [
-            #db.column<"age", i32, -1>,
-            #db.column<"salary", i32, -1>
-        ]>
+
+// -----
+// CHECK-LABEL: func.func @lower_filter_region_ops(
+// CHECK-SAME:    %[[ARG0:.*]]: {{.*}}, %[[ARG1:.*]]: {{.*}}
+// CHECK:         %[[MASK_EMPTY:.*]] = tensor.empty() : tensor<100xi1>
+// CHECK:         %[[MASK:.*]] = linalg.generic {{{.*}}} 
+// CHECK-SAME:      ins(%[[ARG0]], %[[ARG1]] : {{.*}}, {{.*}}) outs(%[[MASK_EMPTY]] : {{.*}})
+// CHECK-NEXT:    ^bb0(%[[AGE:.*]]: i32, %[[SALARY:.*]]: i32, %{{.*}}: i1):
+
+// CHECK:           %[[C40:.*]] = arith.constant 40 : i32
+// CHECK:           %[[C12000:.*]] = arith.constant 12000 : i32
+// CHECK:           %[[AGE_CMP:.*]] = arith.cmpi sgt, %[[AGE]], %[[C40]] : i32
+// CHECK:           %[[SALARY_CMP:.*]] = arith.cmpi slt, %[[SALARY]], %[[C12000]] : i32
+// CHECK:           %[[AGE_SALARY_CMP:.*]] = arith.andi %[[AGE_CMP]], %[[SALARY_CMP]] : i1
+
+// CHECK:           %[[C100:.*]] = arith.constant 100 : i32
+// CHECK:           %[[C1000:.*]] = arith.constant 1000 : i32
+// CHECK:           %[[SALARY_100:.*]] = arith.cmpi eq, %[[SALARY]], %[[C100]] : i32
+// CHECK:           %[[SALARY_1000:.*]] = arith.cmpi eq, %[[SALARY]], %[[C1000]] : i32
+// CHECK:           %[[OR_SALARY_CMP:.*]] = arith.ori %[[SALARY_100]], %[[SALARY_1000]] : i1
+
+// CHECK:           %[[CMP:.*]] = arith.andi %[[AGE_SALARY_CMP]], %[[OR_SALARY_CMP]] : i1
+// CHECK:           linalg.yield %[[CMP]] : i1
+func.func @lower_filter_region_ops(%arg0: !table) -> (!new_table) {
+    %filtered1 = db.filter %arg0 : !table {
+        ^bb0(%age: !db.column<i32>, %salary: !db.column<i32>):
+            %c40 = arith.constant 40 : i32
+            %c12000 = arith.constant 12000 : i32
+            // WHERE age > 40 AND SALARY < 12000
+            %age_cmp = db.cmpi gt, %age, %c40 : (!db.column<i32>, i32) -> !db.column<i1>
+            %salary_cmp = db.cmpi lt, %salary, %c12000 : (!db.column<i32>, i32) -> !db.column<i1>
+            %age_salary_cmp = db.and %age_cmp, %salary_cmp : (!db.column<i1>, !db.column<i1>) -> !db.column<i1>
+
+            // WHERE salary == 1000 OR salary == 100
+            %c100 = arith.constant 100 : i32
+            %c1000 = arith.constant 1000 : i32
+            %salary_100 = db.cmpi eq, %salary, %c100 : (!db.column<i32>, i32) -> !db.column<i1>
+            %salary_1000 = db.cmpi eq, %salary, %c1000 : (!db.column<i32>, i32) -> !db.column<i1>
+            %or_salary_cmp = db.or %salary_100, %salary_1000: (!db.column<i1>, !db.column<i1>) -> !db.column<i1>
+
+            // Combine above two statements
+            %final_cmp = db.and %age_salary_cmp, %or_salary_cmp : (!db.column<i1>, !db.column<i1>) -> !db.column<i1>
+            db.filter_yield %final_cmp : !db.column<i1>
+        } -> (!new_table)
+    return %filtered1 : !new_table
 }
