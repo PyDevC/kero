@@ -59,7 +59,7 @@ class DBCmpIPredicate:
         return f'{self.predicate}'
 
 class DBRegion:
-    def __init__(self, block_args: List[DBColumn], operations: "CmpIOp", f_yield: "FilterYieldOp"):
+    def __init__(self, block_args: List[DBColumn], operations: Union["CmpIOp", "LogicalOp"], f_yield: "FilterYieldOp"):
         self.block_args = block_args
         self.operations = operations
         self.f_yield = f_yield
@@ -109,3 +109,29 @@ class CmpIOp:
 
     def __repr__(self) -> str:
         return f'db.cmpi {self.predicate}, %column, %constant : ({self.lhs}, {self.rhs}) -> {self.output}\n'
+
+class LogicalOp:
+    def __init__(self, lhs: Union[CmpIOp, "LogicalOp"], rhs: Union[CmpIOp, "LogicalOp"], output, type: str) -> None:
+        self.lhs = lhs
+        self.rhs = rhs
+        self.output = output
+        self.type = type
+
+    def __repr__(self) -> str:
+        return f'db.{self.type} %misc , %misc : ({self.lhs.output}, {self.rhs.output}) -> {self.output}\n'
+
+class AndOp(LogicalOp):
+    def __init__(self, lhs: Union[CmpIOp, "LogicalOp"], rhs: Union[CmpIOp, "LogicalOp"], output) -> None:
+        super().__init__(lhs, rhs, output, "and")
+
+class OrOp(LogicalOp):
+    def __init__(self, lhs: Union[CmpIOp, "LogicalOp"], rhs: Union[CmpIOp, "LogicalOp"], output) -> None:
+        super().__init__(lhs, rhs, output, "or")
+
+class NotOp:
+    def __init__(self, rhs: Union[CmpIOp, "LogicalOp"], output) -> None:
+        self.rhs = rhs
+        self.output = output
+
+    def __repr__(self) -> str:
+        return f'db.not %misc {self.rhs.output} -> {self.output}\n'

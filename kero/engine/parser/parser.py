@@ -143,7 +143,7 @@ class GlotToDB:
 
         return operations, block_args
             
-    def _parse_expression(self, glotnode: exp.Expr) -> t.Union[CmpIOp, DBColumn, DBLiteral]:
+    def _parse_expression(self, glotnode: exp.Expr) -> t.Union[LogicalOp, CmpIOp, DBColumn, DBLiteral]:
         if type(glotnode) not in self.op_map:
             raise NodeNotImplemented()
 
@@ -151,9 +151,9 @@ class GlotToDB:
 
     def _get_operation_map(self) -> t.Dict[t.Any, MethodType]:
         return {
-            exp.And: self._not_implemeted,
-            exp.Or: self._not_implemeted,
-            exp.Not: self._not_implemeted,
+            exp.And: self._parse_exp_and,
+            exp.Or: self._parse_exp_or,
+            exp.Not: self._parse_exp_not,
             exp.LT: self._parse_exp_cmp_lt,
             exp.LTE: self._parse_exp_cmp_lte,
             exp.EQ: self._parse_exp_cmp_eq,
@@ -168,6 +168,42 @@ class GlotToDB:
         raise NodeNotImplemented()
 
     # Parse specific expressions
+    def _parse_exp_logical(self, glotnode: exp.Expr):
+        lhs = self._parse_expression(glotnode.this)
+        rhs = self._parse_expression(glotnode.expression)
+        output = DBColumn("bool")
+
+        if isinstance(lhs, DBColumn):
+            raise GlotConversionNotPossible(type(lhs))
+        elif isinstance(rhs, DBColumn):
+            raise GlotConversionNotPossible(type(lhs))
+
+        if isinstance(lhs, DBLiteral):
+            raise GlotConversionNotPossible(type(rhs))
+        elif isinstance(rhs, DBLiteral):
+            raise GlotConversionNotPossible(type(lhs))
+
+        return lhs, rhs, output
+
+    def _parse_exp_and(self, glotnode: exp.And):
+        lhs, rhs, output = self._parse_exp_logical(glotnode)
+        return AndOp(lhs, rhs, output)
+
+    def _parse_exp_or(self, glotnode: exp.Or):
+        lhs, rhs, output = self._parse_exp_logical(glotnode)
+        return OrOp(lhs, rhs, output)
+
+    def _parse_exp_not(self, glotnode: exp.Not):
+        rhs = self._parse_expression(glotnode.expression)
+        output = DBColumn("bool")
+
+        if isinstance(rhs, DBColumn):
+            raise GlotConversionNotPossible(type(rhs))
+        elif isinstance(rhs, DBLiteral):
+            raise GlotConversionNotPossible(type(rhs))
+
+        return NotOp(rhs, output)
+
     def _parse_exp_cmp(self, glotnode: exp.Expr, predicate) -> CmpIOp:
         lhs = self._parse_expression(glotnode.this)
         rhs = self._parse_expression(glotnode.expression)
@@ -221,7 +257,7 @@ class GlotToDB:
         input: DBTable,
         output: DBTable,
         block_args: List[DBColumn],
-        operations: CmpIOp
+        operations: Union[CmpIOp, LogicalOp]
     ) -> FilterOp:
 
         mask = DBColumn("bool")
