@@ -4,14 +4,14 @@ get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 set(LIBS
     ${dialect_libs}
     ${conversion_libs}
+
     MLIRIR
-
-    MLIRRegisterAllDialects
-
     MLIROptLib
     MLIRPass
-    MLIRTransforms
+    MLIRRegisterAllDialects
     MLIRRegisterAllPasses
+    MLIRRegisterAllExtensions
+    MLIRTransforms
 )
 
 add_llvm_executable(kero-opt kero-opt.cpp)

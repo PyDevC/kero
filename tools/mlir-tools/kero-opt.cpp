@@ -4,6 +4,7 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
+#include "mlir/InitAllExtensions.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 #include "Conversion/Passes.h"
@@ -13,6 +14,8 @@ int main(int argc, char** argv) {
     
     mlir::registerAllDialects(registry);
     registry.insert<mlir::db::DBDialect>();
+
+    mlir::registerAllExtensions(registry);
 
     mlir::registerAllPasses();
     mlir::registerConvertToLLVMDependentDialectLoading(registry);
