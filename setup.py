@@ -37,7 +37,18 @@ from setuptools.command.build import build as _build
 from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.build_py import build_py as _build_py
 
-PACKAGE_VERSION = "0.1.0"
+def get_kero_version(official_version=False):
+    version = pathlib.Path(os.path.dirname(__file__), "version.txt").read_text().strip()
+    if official_version:
+        return version
+
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=os.path.dirname(__file__)
+    )
+    git_sha = revision.decode("ascii").strip()
+
+    return version + "+git" + git_sha[:7]
+
 SETUPPY_DIR = os.path.realpath(os.path.dirname(__file__))
 
 THIRDPARTY_LLVM_DIR = os.getenv("THIRDPARTY_LLVM_DIR", None)
@@ -46,6 +57,12 @@ KERO_BUILD_DIR = os.getenv("KERO_BUILD_DIR", os.path.join(SETUPPY_DIR, "build"))
 CMAKE_BUILD_TYPE = os.getenv("CMAKE_BUILD_TYPE", "Release")
 BUILD_SYSTEM = os.getenv("BUILD_SYSTEM", "Ninja")
 MAX_JOBS = os.getenv("MAX_JOBS", str(multiprocessing.cpu_count()))
+
+official_version = False
+if CMAKE_BUILD_TYPE == "Release":
+    official_version = True
+
+PACKAGE_VERSION = get_kero_version(official_version)
 
 CMAKE_INSTALL_DIR_REL = os.path.join("build", "setup_install")
 CMAKE_INSTALL_DIR_ABS = os.path.join(SETUPPY_DIR, CMAKE_INSTALL_DIR_REL)
@@ -228,10 +245,8 @@ setup(
     install_requires=[
         "packaging",
         "numpy",
-        "pandas",
         "pyarrow",
         "sqlglot",
-        "sqlparse",
     ],
     extras_require={
         "cuda": ["torch>=2.5.0"],

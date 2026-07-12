@@ -14,6 +14,7 @@ if [[ $# -gt 0 ]]; then
     if [[ $1 == "install" ]]; then
         pip install . -v
     elif [[ $1 == "wheel" ]]; then
+        pip install build
         python3 -m build --wheel
     fi
 else
