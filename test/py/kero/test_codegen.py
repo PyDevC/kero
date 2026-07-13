@@ -361,7 +361,7 @@ class TestFullPipeline(TestCase):
         dataset = all_number_dataset()
         par = Parser(dataset)
         ops = par.parse(
-            "SELECT age FROM employee WHERE salary > 50000"
+            "SELECT age FROM employee WHERE salary > 50000 AND age < 40"
         )
         irgen = codegen.IRGen("roundtrip_filter", ops)
         irgen.emit_ir()
