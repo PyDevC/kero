@@ -38,8 +38,12 @@ class NodeNotFound(BaseParserException):
         return f'{type(self.node)} does not exists in the query'
 
 class NodeNotImplemented(BaseGlotToDBException):
+    def __init__(self, node):
+        super().__init__()
+        self.node = node
+
     def __str__(self):
-        return 'Node not implemented'
+        return f'{self.node} node not implemented'
 
 class ColumnNotInTable(BaseGlotToDBException):
     def __init__(self, name):
@@ -145,7 +149,7 @@ class GlotToDB:
             
     def _parse_expression(self, glotnode: exp.Expr) -> t.Union[LogicalOp, CmpIOp, DBColumn, DBLiteral]:
         if type(glotnode) not in self.op_map:
-            raise NodeNotImplemented()
+            raise NodeNotImplemented(glotnode)
 
         return self.op_map[type(glotnode)](glotnode)
 
@@ -165,7 +169,7 @@ class GlotToDB:
         }
 
     def _not_implemeted(self, glotnode: exp.Expr):
-        raise NodeNotImplemented()
+        raise NodeNotImplemented(glotnode)
 
     # Parse specific expressions
     def _parse_exp_logical(self, glotnode: exp.Expr):
@@ -194,7 +198,7 @@ class GlotToDB:
         return OrOp(lhs, rhs, output)
 
     def _parse_exp_not(self, glotnode: exp.Not):
-        rhs = self._parse_expression(glotnode.expression)
+        rhs = self._parse_expression(glotnode.this)
         output = DBColumn("bool")
 
         if isinstance(rhs, DBColumn):
