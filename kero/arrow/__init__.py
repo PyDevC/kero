@@ -1,3 +1,4 @@
-from . import data, samples, type_resolve
+from . import data, samples
+from .data import Dataset
 
-__all__ = ["data", "samples", "type_resolve"]
+__all__ = ["data", "samples", "Dataset"]

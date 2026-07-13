@@ -9,10 +9,13 @@ set(LIBS
     MLIRRegisterAllDialects
     MLIRRegisterAllExtensions
 
+    MLIRIR
     MLIROptLib
     MLIRPass
-    MLIRTransforms
+    MLIRRegisterAllDialects
     MLIRRegisterAllPasses
+    MLIRRegisterAllExtensions
+    MLIRTransforms
 )
 
 add_llvm_executable(kero-opt kero-opt.cpp)

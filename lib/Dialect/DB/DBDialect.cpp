@@ -125,6 +125,20 @@ llvm::LogicalResult OutputOp::verify() {
 
 llvm::LogicalResult FilterOp::verify() {
     // Verify argument types in Basic Blocks
+    auto blockArgs = getRegion().getBlocks().front().getArguments();
+    for (auto arg : blockArgs) {
+        if (!isa<ColumnType>(arg.getType())) {
+            return emitError() << "Block Argument should be of DBColumnType";
+        }
+    }
+
+    // Verify Filtered output Type
+    auto outputType = getFiltered().getType();
+    // Only need to check the nrows of TableType since all nrows should be same
+    if(outputType.getNrows() != -1){
+        return emitError() << "Nrows of filter region output should always be -1";
+    }
+    
     return llvm::success();
 }
 

@@ -1,0 +1,34 @@
+.wy-nav-content {
+    max-width: 900px;
+}
+
+.wy-hero {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #e0e0e0;
+    padding: 40px 0;
+    margin-bottom: 30px;
+}
+
+.wy-hero h1 {
+    color: #ffffff;
+    font-size: 2.2em;
+    margin-bottom: 10px;
+}
+
+.wy-hero p {
+    font-size: 1.1em;
+    color: #c0c0c0;
+}
+
+dl.field-list > dt {
+    color: #2980b9;
+}
+
+code.literal {
+    color: #2980b9;
+    background: none;
+}
+
+div[class^="highlight"] {
+    border-radius: 6px;
+}

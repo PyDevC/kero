@@ -303,6 +303,56 @@ class CmpIOpLowering : public OpConversionPattern<CmpIOp> {
     }
 };
 
+class LogicalAndOpLowering : public OpConversionPattern<LogicalAndOp> {
+    public:
+    using OpConversionPattern::OpConversionPattern;
+    LogicalResult matchAndRewrite(LogicalAndOp Op, OneToNOpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override {
+        auto lhs = adaptor.getOperands()[0];
+        auto rhs = adaptor.getOperands()[1];
+
+        auto arithAnd = arith::AndIOp::create(rewriter, Op.getLoc(), lhs[0], rhs[0]);
+
+        rewriter.replaceOp(Op, arithAnd.getResult());
+        return success();
+    }
+};
+
+class LogicalOrOpLowering : public OpConversionPattern<LogicalOrOp> {
+    public:
+    using OpConversionPattern::OpConversionPattern;
+    LogicalResult matchAndRewrite(LogicalOrOp Op, OneToNOpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override {
+        auto lhs = adaptor.getOperands()[0];
+        auto rhs = adaptor.getOperands()[1];
+
+        auto arithOr = arith::OrIOp::create(rewriter, Op.getLoc(), lhs[0], rhs[0]);
+
+        rewriter.replaceOp(Op, arithOr.getResult());
+        return success();
+    }
+};
+
+class LogicalNotOpLowering : public OpConversionPattern<LogicalNotOp> {
+    public:
+    using OpConversionPattern::OpConversionPattern;
+    LogicalResult matchAndRewrite(LogicalNotOp Op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter& rewriter) const override {
+        auto rhs = adaptor.getOperands();
+        auto i1Type = rewriter.getI1Type();
+        auto flipMask = arith::ConstantOp::create(
+            rewriter, Op.getLoc(),
+            i1Type, rewriter.getIntegerAttr(i1Type, true));
+
+        auto flipVal = arith::XOrIOp::create(
+            rewriter, Op.getLoc(),
+            i1Type, rhs[0], flipMask.getResult());
+
+        rewriter.replaceOp(Op, flipVal.getResult());
+        return success();
+    }
+};
+
 class OutputOpLowering : public OpConversionPattern<OutputOp> {
     public:
     using OpConversionPattern::OpConversionPattern;
@@ -362,7 +412,10 @@ struct DBToTensor : impl::DBToTensorBase<DBToTensor> {
 
         RewritePatternSet patterns(ctx);
         patterns.add<ScanOpLowering>(converter, ctx);
-        patterns.add<CmpIOpLowering>(converter, ctx);
+        patterns.add<CmpIOpLowering,
+                     LogicalAndOpLowering,
+                     LogicalOrOpLowering,
+                     LogicalNotOpLowering>(converter, ctx);
         patterns.add<FilterOpLowering, FilterYieldOpLowering>(converter, ctx);
         patterns.add<OutputOpLowering>(converter, ctx);
 
