@@ -123,34 +123,56 @@ class AstToKeroConverter:
             col_names.append(col.metadata.metadata["column_name"])
             col_dtypes.append(convert_dtype(dtype))
 
-        filter_block = ir.Block.create_at_start(filter_op.body, col_types)
-
-        with ir.InsertionPoint(filter_block):
-            cmp_op = node.region.operations
-            col_idx = col_names.index(cmp_op.lhs.name)
-            col_arg = filter_block.arguments[col_idx]
-
-            bitwidth = int(col_dtypes[col_idx][1:])
-            int_type = ir.IntegerType.get(bitwidth)
-            const = arith.constant(int_type, cmp_op.rhs.constant)
-
-            predicate_map = {"lt": 0, "lte": 1, "gt": 2, "gte": 3, "eq": 4, "neq": 5}
-            predicate_attr = ir.IntegerAttr.get(
-                ir.IntegerType.get_signless(64, context=self.context),
-                predicate_map[cmp_op.predicate],
-            )
-
-            result_type = make_dbcolumn_type("i1", self.context)
-            cmp_result = db.cmpi(
-                result=result_type,
-                predicate=predicate_attr,
-                col=col_arg,
-                constint=const,
-            )
-
-            db.filter_yield(mask=cmp_result)
+        region_block = ir.Block.create_at_start(filter_op.body, col_types)
+        self._make_filter_region_ops(region_block, node, col_names, col_dtypes)
 
         return filter_op.filtered
+
+    def _make_filter_region_ops(self, region_block, node, col_names, col_dtypes):
+        with ir.InsertionPoint(region_block):
+            result = self._emit_region_op(node.region.operations, region_block, col_names, col_dtypes)
+            db.filter_yield(mask=result)
+
+    def _emit_region_op(self, op, region_block, col_names, col_dtypes):
+        if isinstance(op, CmpIOp):
+            return self._emit_cmpi(op, region_block, col_names, col_dtypes)
+        elif isinstance(op, AndOp):
+            lhs = self._emit_region_op(op.lhs, region_block, col_names, col_dtypes)
+            rhs = self._emit_region_op(op.rhs, region_block, col_names, col_dtypes)
+            result_type = make_dbcolumn_type("i1", self.context)
+            return db.and_(result=result_type, col1=lhs, col2=rhs)
+        elif isinstance(op, OrOp):
+            lhs = self._emit_region_op(op.lhs, region_block, col_names, col_dtypes)
+            rhs = self._emit_region_op(op.rhs, region_block, col_names, col_dtypes)
+            result_type = make_dbcolumn_type("i1", self.context)
+            return db.or_(result=result_type, col1=lhs, col2=rhs)
+        elif isinstance(op, NotOp):
+            rhs = self._emit_region_op(op.rhs, region_block, col_names, col_dtypes)
+            result_type = make_dbcolumn_type("i1", self.context)
+            return db.not_(result=result_type, col=rhs)
+
+    def _emit_cmpi(self, cmp_op, region_block, col_names, col_dtypes):
+        col_idx = col_names.index(cmp_op.lhs.name)
+        col_arg = region_block.arguments[col_idx]
+
+        bitwidth = int(col_dtypes[col_idx][1:])
+        int_type = ir.IntegerType.get(bitwidth)
+        const = arith.constant(int_type, cmp_op.rhs.constant)
+
+        predicate_map = {"lt": 0, "lte": 1, "gt": 2, "gte": 3, "eq": 4, "neq": 5}
+        predicate_attr = ir.IntegerAttr.get(
+            ir.IntegerType.get_signless(64, context=self.context),
+            predicate_map[cmp_op.predicate],
+        )
+
+        result_type = make_dbcolumn_type("i1", self.context)
+        return db.cmpi(
+            result=result_type,
+            predicate=predicate_attr,
+            col=col_arg,
+            constint=const,
+        )
+
 
     def _node_to_op_map(self):
         return {
