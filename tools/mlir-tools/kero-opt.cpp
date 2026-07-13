@@ -3,6 +3,7 @@
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/InitAllDialects.h"
+#include "mlir/InitAllExtensions.h"
 #include "mlir/InitAllPasses.h"
 #include "mlir/InitAllExtensions.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
@@ -13,6 +14,7 @@ int main(int argc, char** argv) {
     mlir::DialectRegistry registry;
     
     mlir::registerAllDialects(registry);
+    mlir::registerAllExtensions(registry);
     registry.insert<mlir::db::DBDialect>();
 
     mlir::registerAllExtensions(registry);
