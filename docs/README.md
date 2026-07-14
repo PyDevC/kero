@@ -1,3 +1,15 @@
 # Kero Documentation
 
-Will be available soon
+All docs are available in source/ directory
+
+## Build docs
+Install requirements
+
+```
+pip install -r requirements.txt
+```
+
+Build docs
+```
+make html
+```
