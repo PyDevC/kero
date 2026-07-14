@@ -1,2 +1,4 @@
 lit
 pandas
+pytest
+pytest-benchmark
