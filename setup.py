@@ -220,7 +220,7 @@ setup(
     version=PACKAGE_VERSION,
     author="PyDevC",
     author_email="pydevc@proton.me",
-    description="GPU Accelerated SQL Query Engine",
+    description="SQL Query Engine",
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,

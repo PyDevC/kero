@@ -3,7 +3,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/PyDevC/kero)
 ![Status](https://img.shields.io/badge/status-pre--release-orange)
 
-**GPU-Accelerated SQL Query Engine built on MLIR.**
+**SQL Query Engine built on MLIR.**
 
 Kero-Sine compiles SQL queries through multiple IR levels using MLIR, executing them on CPU with GPU support planned for the future. It uses [SQLGlot](https://github.com/tobymao/sqlglot) for syntax handling across dialects, and [PyArrow](https://arrow.apache.org/docs/python/) for seamless interaction with existing databases.
 
