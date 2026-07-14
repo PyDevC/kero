@@ -1,0 +1,233 @@
+--- Performance Evaluation Timing in seconds
+Size of dataset grows from 100 to 100,000,000 with steps of (prev size * 10)
+
+For Size: 100
+	- For Query: SELECT age, salary, spendings FROM employee
+		{
+            'parsing': 0.0003521489998092875, 
+            'codegen': 0.006953228999918792, 
+            'lowering': 0.0015175239996096934, 
+            'execution': 0.006262153000534454
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 50
+		{
+            'parsing': 0.00030440899990935577, 
+            'codegen': 0.004990728000848321, 
+            'lowering': 0.004418730999532272, 
+            'execution': 0.03938221899989003
+        }
+
+	- For Query: SELECT salary FROM employee WHERE salary <= 40000 AND age < 12
+		{
+            'parsing': 0.0003262679992985795, 
+            'codegen': 0.00348566499997105, 
+            'lowering': 0.0038340940000125556, 
+            'execution': 0.03941631900033826
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 20 AND salary < 100000 OR salary = 10000 AND department_id = 1 OR department_id = 2 AND experience_years >= 5 AND performance_rating != 3 OR is_active = 1 AND hire_year <= 2025 AND bonus_eligible = 1 OR manager_id = 101 AND age < 30 OR NOT region_id = 4 AND termination_year = 0 OR position_level > 2 AND certification_count >= 1
+		{
+            'parsing': 0.0009106759998758207, 
+            'codegen': 0.0038017540000510053, 
+            'lowering': 0.00452084999960789, 
+            'execution': 0.046307888999763236
+        }
+
+For Size: 1000
+	- For Query: SELECT age, salary, spendings FROM employee
+		{
+            'parsing': 0.00024287899941555224, 
+            'codegen': 0.00334802499946818, 
+            'lowering': 0.0009898759999487083, 
+            'execution': 0.004380581000077655
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 50
+		{
+            'parsing': 0.00023726900053588906, 
+            'codegen': 0.003743453000424779, 
+            'lowering': 0.00411472199994023, 
+            'execution': 0.03228362899972126
+        }
+
+	- For Query: SELECT salary FROM employee WHERE salary <= 40000 AND age < 12
+		{
+            'parsing': 0.0002936490000138292, 
+            'codegen': 0.003475174999948649, 
+            'lowering': 0.003917953000382113, 
+            'execution': 0.02862891499989928
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 20 AND salary < 100000 OR salary = 10000 AND department_id = 1 OR department_id = 2 AND experience_years >= 5 AND performance_rating != 3 OR is_active = 1 AND hire_year <= 2025 AND bonus_eligible = 1 OR manager_id = 101 AND age < 30 OR NOT region_id = 4 AND termination_year = 0 OR position_level > 2 AND certification_count >= 1
+		{
+            'parsing': 0.0008535159995517461, 
+            'codegen': 0.0039425429995390004, 
+            'lowering': 0.0047995990007621, 
+            'execution': 0.03532381599961809
+        }
+
+For Size: 10000
+	- For Query: SELECT age, salary, spendings FROM employee
+		{
+            'parsing': 0.0002204789998359047, 
+            'codegen': 0.003538324000146531, 
+            'lowering': 0.0011189750002813525, 
+            'execution': 0.004373470999780693
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 50
+		{
+            'parsing': 0.0002040090002992656, 
+            'codegen': 0.0037588940003843163, 
+            'lowering': 0.004104791999452573, 
+            'execution': 0.029474521999873105
+        }
+
+	- For Query: SELECT salary FROM employee WHERE salary <= 40000 AND age < 12
+		{
+            'parsing': 0.0002535290004743729, 
+            'codegen': 0.0034871340003519435, 
+            'lowering': 0.0037026840000180528, 
+            'execution': 0.025570228999640676
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 20 AND salary < 100000 OR salary = 10000 AND department_id = 1 OR department_id = 2 AND experience_years >= 5 AND performance_rating != 3 OR is_active = 1 AND hire_year <= 2025 AND bonus_eligible = 1 OR manager_id = 101 AND age < 30 OR NOT region_id = 4 AND termination_year = 0 OR position_level > 2 AND certification_count >= 1
+		{
+            'parsing': 0.000796466999418044, 
+            'codegen': 0.004018253000140248, 
+            'lowering': 0.004816079000192985, 
+            'execution': 0.03454671000054077
+        }
+
+For Size: 100000
+	- For Query: SELECT age, salary, spendings FROM employee
+		{
+            'parsing': 0.000212879000173416, 
+            'codegen': 0.0033470660000602948, 
+            'lowering': 0.000978614999439742, 
+            'execution': 0.004361341000731045
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 50
+		{
+            'parsing': 0.00021819900030095596, 
+            'codegen': 0.0037443439996422967, 
+            'lowering': 0.004155231999902753, 
+            'execution': 0.04248318600002676
+        }
+
+	- For Query: SELECT salary FROM employee WHERE salary <= 40000 AND age < 12
+		{
+            'parsing': 0.0002717990000746795, 
+            'codegen': 0.0037317939995773486, 
+            'lowering': 0.003784612999879755, 
+            'execution': 0.028392796999469283
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 20 AND salary < 100000 OR salary = 10000 AND department_id = 1 OR department_id = 2 AND experience_years >= 5 AND performance_rating != 3 OR is_active = 1 AND hire_year <= 2025 AND bonus_eligible = 1 OR manager_id = 101 AND age < 30 OR NOT region_id = 4 AND termination_year = 0 OR position_level > 2 AND certification_count >= 1
+		{
+            'parsing': 0.0008090470000752248, 
+            'codegen': 0.0038210029997571837, 
+            'lowering': 0.0045068610006637755, 
+            'execution': 0.03616574300031061
+        }
+
+For Size: 1000000
+	- For Query: SELECT age, salary, spendings FROM employee
+		{
+            'parsing': 0.00026333899950259365, 
+            'codegen': 0.003772484000364784, 
+            'lowering': 0.0010797550003189826, 
+            'execution': 0.004396841000016138
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 50
+		{
+            'parsing': 0.00021071900027891388, 
+            'codegen': 0.0035682650004673633, 
+            'lowering': 0.0038974130002316087, 
+            'execution': 0.04373075099920243
+        }
+
+	- For Query: SELECT salary FROM employee WHERE salary <= 40000 AND age < 12
+		{
+            'parsing': 0.00030010899990884354, 
+            'codegen': 0.0037176929999986896, 
+            'lowering': 0.003839734000393946, 
+            'execution': 0.034435160000612086
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 20 AND salary < 100000 OR salary = 10000 AND department_id = 1 OR department_id = 2 AND experience_years >= 5 AND performance_rating != 3 OR is_active = 1 AND hire_year <= 2025 AND bonus_eligible = 1 OR manager_id = 101 AND age < 30 OR NOT region_id = 4 AND termination_year = 0 OR position_level > 2 AND certification_count >= 1
+		{
+            'parsing': 0.0008276260005004588, 
+            'codegen': 0.0038551930001631263, 
+            'lowering': 0.004524130999925546, 
+            'execution': 0.06846303199927206
+        }
+
+For Size: 10000000
+	- For Query: SELECT age, salary, spendings FROM employee
+		{
+            'parsing': 0.00039283899968722835, 
+            'codegen': 0.0044926599994141725, 
+            'lowering': 0.0012524249996204162, 
+            'execution': 0.004525830000602582
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 50
+		{
+            'parsing': 0.0002389089995631366, 
+            'codegen': 0.0035641849999592523, 
+            'lowering': 0.003943413000342844, 
+            'execution': 0.3412036689996967
+        }
+
+	- For Query: SELECT salary FROM employee WHERE salary <= 40000 AND age < 12
+		{
+            'parsing': 0.00042674799988162704, 
+            'codegen': 0.004759398999340192, 
+            'lowering': 0.0041526920003889245, 
+            'execution': 0.11997077999967587
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 20 AND salary < 100000 OR salary = 10000 AND department_id = 1 OR department_id = 2 AND experience_years >= 5 AND performance_rating != 3 OR is_active = 1 AND hire_year <= 2025 AND bonus_eligible = 1 OR manager_id = 101 AND age < 30 OR NOT region_id = 4 AND termination_year = 0 OR position_level > 2 AND certification_count >= 1
+		{
+            'parsing': 0.0009883350003292435, 
+            'codegen': 0.004958538999744633, 
+            'lowering': 0.00496562799980893, 
+            'execution': 0.6133723970006031
+        }
+
+For Size: 100000000
+	- For Query: SELECT age, salary, spendings FROM employee
+		{
+            'parsing': 0.0004156179993515252, 
+            'codegen': 0.004470201000003726, 
+            'lowering': 0.001311884000642749, 
+            'execution': 0.004550080000626622
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 50
+		{
+            'parsing': 0.0002398290007477044, 
+            'codegen': 0.00381943400043383, 
+            'lowering': 0.004071272000146564, 
+            'execution': 2.6967328850005288
+        }
+
+	- For Query: SELECT salary FROM employee WHERE salary <= 40000 AND age < 12
+		{
+            'parsing': 0.00042306900013500126, 
+            'codegen': 0.0047662989991295035, 
+            'lowering': 0.004194762000224728, 
+            'execution': 0.9007799900000464
+        }
+
+	- For Query: SELECT * FROM employee WHERE age > 20 AND salary < 100000 OR salary = 10000 AND department_id = 1 OR department_id = 2 AND experience_years >= 5 AND performance_rating != 3 OR is_active = 1 AND hire_year <= 2025 AND bonus_eligible = 1 OR manager_id = 101 AND age < 30 OR NOT region_id = 4 AND termination_year = 0 OR position_level > 2 AND certification_count >= 1
+		{
+            'parsing': 0.0009715760006656637, 
+            'codegen': 0.005135696999786887, 
+            'lowering': 0.005159108000043489, 
+            'execution': 5.785288457000206
+        }
