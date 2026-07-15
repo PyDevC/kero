@@ -64,6 +64,7 @@ bash scripts/py_build.sh
 ```
 
 ## Example query
+This is example bare minimum code required for computations.
 ```python
 from kero.arrow.samples import all_number_dataset
 from kero.engine import Parser, codegen
@@ -79,10 +80,81 @@ irgen.emit_ir()
 codegen.db_to_llvm_lowering(irgen.module, irgen.context)
 
 exe = KeroEngine(irgen.module, irgen.context)
-exe.configure_outputs([0, 1, 2])
+exe.configure_outputs([i for i in range(irgen.func_result_num)])
 print(irgen.func_result_num)
 results = exe.execute("get_aged_employee", dataset, ["employee"])
 numpy_results = exe.results_to_numpy(results)
 for id, array in numpy_results.items():
     print(array)
+```
+
+The Above Query will give us IR form:
+```mlir
+!table = !db.table<3, 10000 : [<"age", i32, 10000>, <"salary", i32, 10000>, <"spendings", i32, 10000>]>
+!new_table = !db.table<3, -1 : [<"age", i32, -1>, <"salary", i32, -1>, <"spendings", i32, -1>]>
+
+module {
+  func.func @get_aged_employee(%arg0: !table) -> !new_table attributes {llvm.emit_c_interface} {
+    %0 = db.scan %arg0 : !table -> !table
+    %1 = db.filter %0 : !table {
+    ^bb0(%arg1: !db.column<i32>, %arg2: !db.column<i32>, %arg3: !db.column<i32>):
+      %c20_i32 = arith.constant 20 : i32
+      %3 = db.cmpi gt, %arg1, %c20_i32 : (<i32>, i32) -> <i1>
+      db.filter_yield %3 : <i1>
+    } -> (!new_table)
+    %2 = db.output {select = ["age", "salary", "spendings"]} %1 : !new_table -> !new_table
+    return %2 : !new_table
+  }
+}
+```
+
+The Above IR will get lowered to linalg, tensor and STD dialects:
+```mlir
+#map = affine_map<(d0) -> (d0)>
+module {
+  func.func @get_aged_employee(%arg0: tensor<10000xi32>, %arg1: tensor<10000xi32>, %arg2: tensor<10000xi32>) -> (tensor<?xi32>, tensor<?xi32>, tensor<?xi32>) attributes {llvm.emit_c_interface} {
+    %0 = tensor.empty() : tensor<10000xi1>
+    %1 = linalg.generic {indexing_maps = [#map, #map, #map, #map], iterator_types = ["parallel"]} ins(%arg0, %arg1, %arg2 : tensor<10000xi32>, tensor<10000xi32>, tensor<10000xi32>) outs(%0 : tensor<10000xi1>) {
+    ^bb0(%in: i32, %in_2: i32, %in_3: i32, %out: i1):
+      %c20_i32 = arith.constant 20 : i32
+      %7 = arith.cmpi sgt, %in, %c20_i32 : i32
+      linalg.yield %7 : i1
+    } -> tensor<10000xi1>
+    %c0 = arith.constant 0 : index
+    %c10000 = arith.constant 10000 : index
+    %c1 = arith.constant 1 : index
+    %c0_0 = arith.constant 0 : index
+    %2 = scf.for %arg3 = %c0 to %c10000 step %c1 iter_args(%arg4 = %c0_0) -> (index) {
+      %extracted = tensor.extract %1[%arg3] : tensor<10000xi1>
+      %7 = scf.if %extracted -> (index) {
+        %8 = arith.addi %arg4, %c1 : index
+        scf.yield %8 : index
+      } else {
+        scf.yield %arg4 : index
+      }
+      scf.yield %7 : index
+    }
+    %3 = tensor.empty(%2) : tensor<?xi32>
+    %4 = tensor.empty(%2) : tensor<?xi32>
+    %5 = tensor.empty(%2) : tensor<?xi32>
+    %c0_1 = arith.constant 0 : index
+    %6:4 = scf.for %arg3 = %c0 to %c10000 step %c1 iter_args(%arg4 = %3, %arg5 = %4, %arg6 = %5, %arg7 = %c0_1) -> (tensor<?xi32>, tensor<?xi32>, tensor<?xi32>, index) {
+      %extracted = tensor.extract %1[%arg3] : tensor<10000xi1>
+      %7:4 = scf.if %extracted -> (tensor<?xi32>, tensor<?xi32>, tensor<?xi32>, index) {
+        %extracted_2 = tensor.extract %arg0[%arg3] : tensor<10000xi32>
+        %inserted = tensor.insert %extracted_2 into %arg4[%arg7] : tensor<?xi32>
+        %extracted_3 = tensor.extract %arg1[%arg3] : tensor<10000xi32>
+        %inserted_4 = tensor.insert %extracted_3 into %arg5[%arg7] : tensor<?xi32>
+        %extracted_5 = tensor.extract %arg2[%arg3] : tensor<10000xi32>
+        %inserted_6 = tensor.insert %extracted_5 into %arg6[%arg7] : tensor<?xi32>
+        %8 = arith.addi %arg7, %c1 : index
+        scf.yield %inserted, %inserted_4, %inserted_6, %8 : tensor<?xi32>, tensor<?xi32>, tensor<?xi32>, index
+      } else {
+        scf.yield %arg4, %arg5, %arg6, %arg7 : tensor<?xi32>, tensor<?xi32>, tensor<?xi32>, index
+      }
+      scf.yield %7#0, %7#1, %7#2, %7#3 : tensor<?xi32>, tensor<?xi32>, tensor<?xi32>, index
+    }
+    return %6#0, %6#1, %6#2 : tensor<?xi32>, tensor<?xi32>, tensor<?xi32>
+  }
+}
 ```
