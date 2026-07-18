@@ -4,13 +4,71 @@
 ![Status](https://img.shields.io/badge/status-pre--release-orange)
 
 Kero-Sine is a SQL Query Engine built using MLIR, that has the capability to 
-run and optimize queries on CPU (and on GPU in future). It uses `SQLGlot` to 
-handle syntax correctness, it can handle different kinds of queries from 
+run and optimize queries on the CPU (and on the GPU in the future). It uses `SQLGlot` to 
+handle syntax correctness and can handle different kinds of queries from 
 different `dialects`. We use pyarrow to interact with existing databases and 
-apply ETL on them, our main mode of data transfer is numpy arrays which can be 
+apply ETL on them, our main mode of data transfer is NumPy arrays which can be 
 easily gathered from pyarrow tables.
 
 > [!NOTE] Dependencies, full API documentation, and additional docs will be updated at the first release.
+
+## Motivation
+
+For my 4th-semester university database project, I decided to create a SQL Query 
+Engine inspired by the Tensor Query Processor (TQP) which was written using PyTorch.
+I was able to get the filtering system working. It was GPU-accelearted for CUDA and ROCm,
+it worked with torch.compile and I had all the free resources from torch compile such
+as operator fusion, jit compilation, Hardware acceleartion etc. But something was not 
+right, I didn't write the full compiler by myself so I was wary that this might not work
+out in the future. Fast forward to my 6th semester where we had to make a minor project. I 
+decided to re-create it but with MLIR (because I wanted to get started with AI compilers).
+
+As we all know AI compilers are mostly made using MLIR, so MLIR was my first choice 
+when working on this project, It was hard and something that have only been done once
+as Lingo-DB. But the idea came to mind that what if I created a SQL Query Engine which
+executes data as if they were tensors, of course, there I knew I would face challenges with expensive
+computations of data types such as strings, dates, floating point, etc.
+
+The project finally came into existence when I made my first end-to-end compiler in MLIR.
+I knew I would have to deal with tensors, so I decided to use Apache Arrow since it deals with
+databases as columns instead of classic row based representation. 
+
+Along the way I made so many mistakes and fixed them while learning better ways of doing things.
+
+## Design Decisions
+### DB Type
+DB Types involve two types: DBTable, DBColumn
+- **Table** types are used to transfer information about the movement of data.
+- **Column** is for representing computation for a given operation inside filter.
+
+Table type has an array of column attributes which helps in filtering, applying
+filter on particular operation as well as knowing the data type of each column.
+Since all the columns were needed to be converted to tensors in lowering pass, I decided 
+to make it so that a single type shows the data movement and later that type can be expanded to
+tensors without needing complex analysis.
+
+#### Why is there no need for number of rows in Column type?
+This is because the column doesn't need to know where it needs to apply the operation, this is 
+handled in lowering by linalg, the pattern closely matches to arith way of comparing values,
+making it easier to lower.
+
+### Operations
+
+- **Scan Operation:** is needed in the case when we create a new complex data type infuture, where we
+    will pass whole database in the function argument allowing us to compute while retaining the complex
+    relations between different tables.
+
+- **Filter Operation:** is used to apply the where clause in the query and output a unknown size filtered table
+- **Output Operation:** is pretty straight forward to apply, it just takes in a table and outputs only the column
+    which are selected, making lowering much easier by only outputing the filtered tensors, that were selected.
+
+## Current Limitations
+- No JOINs, aggregates (COUNT, SUM), GROUP BY, ORDER BY, LIMIT
+- Restricted support to Integer datatype
+- No query optimization passes
+- Sequential execution only
+- Single-table queries only
+- No Query Chaining
 
 ## Prerequisites
 
@@ -158,3 +216,12 @@ module {
   }
 }
 ```
+
+## What's Next
+- Float and String column type support.
+- Output selects `*` directly, making IR cleaner and having to reducing large output overhead.
+- Support Chaining Different operations together.
+- Query Optimizations, combine different  queries
+- Add float and string support to Execution Engine, and direct reading from pyarrow.
+- Support Nested Query as well as complex query operations such as JOIN, AGG, etc.
+- GPU execution path
