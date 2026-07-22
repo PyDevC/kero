@@ -166,11 +166,11 @@ class AstToKeroConverter:
         )
 
         result_type = make_dbcolumn_type("i1", self.context)
-        return db.cmpi(
+        return db.cmp(
             result=result_type,
             predicate=predicate_attr,
             col=col_arg,
-            constint=const,
+            number=const,
         )
 
 
@@ -181,6 +181,26 @@ class AstToKeroConverter:
             FilterOp: self._make_filter_op,
         }
 
+
+def db_to_openmp_lowering(module, context):
+    with context:
+        pm = PassManager.parse(
+            "builtin.module("
+            "db-to-tensor-and-linalg,"
+            "one-shot-bufferize{bufferize-function-boundaries=true},"
+            "convert-linalg-to-parallel-loops,"
+            "convert-scf-to-openmp,"
+            "convert-scf-to-cf,"
+            "convert-arith-to-llvm,"
+            "convert-cf-to-llvm,"
+            "convert-openmp-to-llvm,"
+            "convert-func-to-llvm,"
+            "reconcile-unrealized-casts"
+            ")"
+        )
+        pm.run(module.operation)
+
+        return module, context
 
 def db_to_llvm_lowering(module, context):
     with context:
