@@ -58,11 +58,14 @@ class ExecutionContext:
 
 
 class KeroEngine:
-    def __init__(self, module, context, opt_level=3):
+    def __init__(self, module, context, opt_level=3, shared_libs=None):
         self.module = module
         self.context = context
         with self.context:
-            self.executor = execute.ExecutionEngine(module, opt_level=opt_level)
+            if shared_libs is None:
+                self.executor = execute.ExecutionEngine(module, opt_level=opt_level)
+            else:
+                self.executor = execute.ExecutionEngine(module, opt_level=opt_level, shared_libs=shared_libs)
 
         self.execution_context = ExecutionContext()
 

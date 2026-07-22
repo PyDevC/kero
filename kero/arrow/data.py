@@ -58,7 +58,11 @@ class Dataset:
         self.__setitem__(name, table)
 
     def get_table_as_arrays(self, name: str) -> Generator[np.ndarray, None, None]:
-        return (col.to_numpy() for col in self._get_table(name).columns)
+        for col in self._get_table(name).columns:
+            if col.num_chunks == 1:
+                yield col.chunk(0).to_numpy(zero_copy_only=True)
+            else:
+                yield col.to_numpy(zero_copy_only=False)
 
     def get_table_metadata(self, name: str) -> dict[str, Any]:
         if name in self.metadatas:
