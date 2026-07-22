@@ -64,7 +64,7 @@ func.func @lower_filter_op(%arg0: !table) -> (!new_table) {
     %filtered = db.filter %arg0 : !table {
         ^bb0(%age: !db.column<i32>, %salary: !db.column<i32>):
             %c0 = arith.constant 10 : i32
-            %0 = db.cmpi eq, %salary, %c0 : (!db.column<i32>, i32) -> !db.column<i1>
+            %0 = db.cmp eq, %salary, %c0 : (!db.column<i32>, i32) -> !db.column<i1>
             db.filter_yield %0 : !db.column<i1>
 
         } -> (!new_table)
@@ -100,15 +100,15 @@ func.func @lower_filter_region_ops(%arg0: !table) -> (!new_table) {
             %c40 = arith.constant 40 : i32
             %c12000 = arith.constant 12000 : i32
             // WHERE age > 40 AND SALARY < 12000
-            %age_cmp = db.cmpi gt, %age, %c40 : (!db.column<i32>, i32) -> !db.column<i1>
-            %salary_cmp = db.cmpi lt, %salary, %c12000 : (!db.column<i32>, i32) -> !db.column<i1>
+            %age_cmp = db.cmp gt, %age, %c40 : (!db.column<i32>, i32) -> !db.column<i1>
+            %salary_cmp = db.cmp lt, %salary, %c12000 : (!db.column<i32>, i32) -> !db.column<i1>
             %age_salary_cmp = db.and %age_cmp, %salary_cmp : (!db.column<i1>, !db.column<i1>) -> !db.column<i1>
 
             // WHERE salary == 1000 OR salary == 100
             %c100 = arith.constant 100 : i32
             %c1000 = arith.constant 1000 : i32
-            %salary_100 = db.cmpi eq, %salary, %c100 : (!db.column<i32>, i32) -> !db.column<i1>
-            %salary_1000 = db.cmpi eq, %salary, %c1000 : (!db.column<i32>, i32) -> !db.column<i1>
+            %salary_100 = db.cmp eq, %salary, %c100 : (!db.column<i32>, i32) -> !db.column<i1>
+            %salary_1000 = db.cmp eq, %salary, %c1000 : (!db.column<i32>, i32) -> !db.column<i1>
             %or_salary_cmp = db.or %salary_100, %salary_1000: (!db.column<i1>, !db.column<i1>) -> !db.column<i1>
 
             // Combine above two statements

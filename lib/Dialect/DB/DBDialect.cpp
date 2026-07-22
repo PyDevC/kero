@@ -1,5 +1,6 @@
 #include "Dialect/DB/IR/DBDialect.h"
 
+#include "llvm/Support/Casting.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Diagnostics.h"
 
@@ -7,6 +8,7 @@
 #include "llvm/Support/LogicalResult.h"
 
 #include "Dialect/DB/IR/DBDialect.cpp.inc"
+#include "mlir/Support/LLVM.h"
 
 #define GET_ATTRDEF_CLASSES
 #include "Dialect/DB/IR/DBDialectAttrs.cpp.inc"
@@ -135,10 +137,10 @@ llvm::LogicalResult FilterOp::verify() {
     // Verify Filtered output Type
     auto outputType = getFiltered().getType();
     // Only need to check the nrows of TableType since all nrows should be same
-    if(outputType.getNrows() != -1){
+    if (outputType.getNrows() != -1) {
         return emitError() << "Nrows of filter region output should always be -1";
     }
-    
+
     return llvm::success();
 }
 
@@ -187,12 +189,20 @@ llvm::LogicalResult verifyOpsFromFilterOp(Operation* op, Type type, Location loc
     return success();
 }
 
-// TODO (PyDevC): For now I don't see anything is needed to verify
-// other than if the operation is inside filter op region
-llvm::LogicalResult CmpIOp::verify() {
-    auto cmpiOp = getOperation();
-    if (failed(verifyOpInFilterRegion(cmpiOp))) {
-        return emitError() << "CmpI Op can only be used inside filter region";
+llvm::LogicalResult CmpOp::verify() {
+    auto cmpOp = getOperation();
+    if (failed(verifyOpInFilterRegion(cmpOp))) {
+        return emitError() << "Cmp Op can only be used inside filter region";
+    }
+
+    // Same dtype of column and number
+    auto columnDtype = dyn_cast<ColumnType>(cmpOp->getOperand(0).getType()).getDtype();
+    auto numberType = cmpOp->getOperand(1).getType();
+
+    if (columnDtype != numberType) {
+        return emitError() << "Cmp Op cannot be applied for Column of type "
+                           << columnDtype << " and " << numberType
+                           << " . Both must be of same type";
     }
     return success();
 }

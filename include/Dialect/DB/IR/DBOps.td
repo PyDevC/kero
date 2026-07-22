@@ -102,14 +102,14 @@ def DB_LogicalNotOp : DB_LogicalOps<"not"> {
     let assemblyFormat = "attr-dict $col `:` `(` type($col) `)` `->` type($result)";
 }
 
-def DB_CmpIOp : DB_Op<"cmpi"> {
-    let summary = "Performs comparison between two column based on given predicate";
+def DB_CmpOp : DB_Op<"cmp"> {
+    let summary = "Performs comparison between column and number based on given predicate";
 
-    let arguments = (ins DB_CmpIPredicateAttr:$predicate, DBColumn:$col, AnyType:$constint);
+    let arguments = (ins DB_CmpPredicateAttr:$predicate, DBColumn:$col, AnyType:$number);
 
     let results = (outs DBColumn:$result);
 
-    let assemblyFormat = "attr-dict $predicate `,` $col `,` $constint `:` `(` type($col) `,` type($constint) `)` `->` type($result)";
+    let assemblyFormat = "attr-dict $predicate `,` $col `,` $number `:` `(` type($col) `,` type($number) `)` `->` type($result)";
 
     let hasVerifier = 1;
 }

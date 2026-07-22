@@ -157,7 +157,7 @@ module {
     %1 = db.filter %0 : !table {
     ^bb0(%arg1: !db.column<i32>, %arg2: !db.column<i32>, %arg3: !db.column<i32>):
       %c20_i32 = arith.constant 20 : i32
-      %3 = db.cmpi gt, %arg1, %c20_i32 : (<i32>, i32) -> <i1>
+      %3 = db.cmp gt, %arg1, %c20_i32 : (<i32>, i32) -> <i1>
       db.filter_yield %3 : <i1>
     } -> (!new_table)
     %2 = db.output {select = ["age", "salary", "spendings"]} %1 : !new_table -> !new_table

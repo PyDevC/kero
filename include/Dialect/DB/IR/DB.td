@@ -87,9 +87,8 @@ def DBColumn : DB_Dialect_Type<"Column", "column"> {
 //===----------------------------------------------------------------------===//
 // DB Cmp Ops Predicate Attrs
 //===----------------------------------------------------------------------===//
-// For now only Integer cmps are supported
-def DB_CmpIPredicateAttr : I64EnumAttr<
-    "CmpIPredicate", "", 
+def DB_CmpPredicateAttr : I64EnumAttr<
+    "CmpPredicate", "", 
     [
         I64EnumAttrCase<"lt",  0>,
         I64EnumAttrCase<"lte", 1>,

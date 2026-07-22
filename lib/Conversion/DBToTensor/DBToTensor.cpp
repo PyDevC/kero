@@ -16,6 +16,8 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/DialectConversion.h"
 
+#include <variant>
+
 namespace mlir {
 namespace db {
 
@@ -272,33 +274,62 @@ class FilterYieldOpLowering : public OpConversionPattern<FilterYieldOp> {
     }
 };
 
-class CmpIOpLowering : public OpConversionPattern<CmpIOp> {
+class CmpOpLowering : public OpConversionPattern<CmpOp> {
     private:
-    arith::CmpIPredicate translatePredicate(db::CmpIPredicate pred) const {
-        switch (pred) {
-            case CmpIPredicate::lt: return arith::CmpIPredicate::slt;
-            case CmpIPredicate::eq: return arith::CmpIPredicate::eq;
-            case CmpIPredicate::gt: return arith::CmpIPredicate::sgt;
-            case CmpIPredicate::lte: return arith::CmpIPredicate::sle;
-            case CmpIPredicate::gte: return arith::CmpIPredicate::sge;
-            case CmpIPredicate::neq: return arith::CmpIPredicate::ne;
+    // Returns either arith int predicate or float predicate
+    std::variant<arith::CmpIPredicate, arith::CmpFPredicate>
+    translatePredicate(CmpOp Op, Type type) const {
+        auto pred = Op.getPredicate();
+        if (dyn_cast<IntegerType>(type)) {
+            switch (pred) {
+                case CmpPredicate::lt: return arith::CmpIPredicate::slt;
+                case CmpPredicate::eq: return arith::CmpIPredicate::eq;
+                case CmpPredicate::gt: return arith::CmpIPredicate::sgt;
+                case CmpPredicate::lte: return arith::CmpIPredicate::sle;
+                case CmpPredicate::gte: return arith::CmpIPredicate::sge;
+                case CmpPredicate::neq: return arith::CmpIPredicate::ne;
+            }
+        } else if (dyn_cast<FloatType>(type)) {
+            switch (pred) {
+                case CmpPredicate::lt: return arith::CmpFPredicate::OLT;
+                case CmpPredicate::eq: return arith::CmpFPredicate::OEQ;
+                case CmpPredicate::gt: return arith::CmpFPredicate::OGT;
+                case CmpPredicate::lte: return arith::CmpFPredicate::OLE;
+                case CmpPredicate::gte: return arith::CmpFPredicate::OGE;
+                case CmpPredicate::neq: return arith::CmpFPredicate::ONE;
+            }
         }
+        llvm_unreachable("Type not supported for a valid predicate");
     }
 
     public:
     using OpConversionPattern::OpConversionPattern;
 
-    LogicalResult matchAndRewrite(CmpIOp Op, OneToNOpAdaptor adaptor,
+    LogicalResult matchAndRewrite(CmpOp Op, OneToNOpAdaptor adaptor,
                                   ConversionPatternRewriter& rewriter) const override {
         auto lhs = adaptor.getOperands()[0];
         auto rhs = adaptor.getOperands()[1];
 
-        auto newPred = translatePredicate(Op.getPredicate());
-        auto compare = arith::CmpIOp::create(
-            rewriter, Op.getLoc(),
-            rewriter.getI1Type(), newPred, lhs[0], rhs[0]);
+        auto rhsType = rhs[0].getType();
 
-        rewriter.replaceOp(Op, compare.getResult());
+        auto newPred = translatePredicate(Op, rhsType);
+
+        Value result;
+        if (std::holds_alternative<arith::CmpIPredicate>(newPred)) {
+            auto newIPred = std::get<arith::CmpIPredicate>(newPred);
+            auto compare = arith::CmpIOp::create(
+                rewriter, Op.getLoc(),
+                rewriter.getI1Type(), newIPred, lhs[0], rhs[0]);
+            result = compare.getResult();
+        } else {
+            auto newFPred = std::get<arith::CmpFPredicate>(newPred);
+            auto compare = arith::CmpFOp::create(
+                rewriter, Op.getLoc(),
+                rewriter.getI1Type(), newFPred, lhs[0], rhs[0]);
+            result = compare.getResult();
+        }
+
+        rewriter.replaceOp(Op, result);
         return success();
     }
 };
@@ -412,7 +443,7 @@ struct DBToTensor : impl::DBToTensorBase<DBToTensor> {
 
         RewritePatternSet patterns(ctx);
         patterns.add<ScanOpLowering>(converter, ctx);
-        patterns.add<CmpIOpLowering,
+        patterns.add<CmpOpLowering,
                      LogicalAndOpLowering,
                      LogicalOrOpLowering,
                      LogicalNotOpLowering>(converter, ctx);
