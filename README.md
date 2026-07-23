@@ -3,72 +3,137 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/PyDevC/kero)
 ![Status](https://img.shields.io/badge/status-pre--release-orange)
 
-Kero-Sine is a SQL Query Engine built using MLIR, that has the capability to 
-run and optimize queries on the CPU (and on the GPU in the future). It uses `SQLGlot` to 
-handle syntax correctness and can handle different kinds of queries from 
-different `dialects`. We use pyarrow to interact with existing databases and 
-apply ETL on them, our main mode of data transfer is NumPy arrays which can be 
-easily gathered from pyarrow tables.
+Kero-Sine is a SQL compiler, designed to run SQL query from Apache Arrow Table
+and help user train ML models with minimal code spent on infra than on actual
+ML code. It adopts the tensor computation model from the Tensor Query Processor
+(TQP), utilizing MLIR Infrastructure to allow compiled code to run on different
+architectures. Gaining both performance, usability, and device portability.
 
 > [!NOTE] Dependencies, full API documentation, and additional docs will be updated at the first release.
 
 ## Motivation
 
-For my 4th-semester university database project, I decided to create a SQL Query 
-Engine inspired by the Tensor Query Processor (TQP) which was written using PyTorch.
-I was able to get the filtering system working. It was GPU-accelearted for CUDA and ROCm,
-it worked with torch.compile and I had all the free resources from torch compile such
-as operator fusion, jit compilation, Hardware acceleartion etc. But something was not 
-right, I didn't write the full compiler by myself so I was wary that this might not work
-out in the future. Fast forward to my 6th semester where we had to make a minor project. I 
-decided to re-create it but with MLIR (because I wanted to get started with AI compilers).
+SQL driven ML pipelines, high amount of code is spent on maintaining
+infrastructure, converting data to different formats to use different libraries
+for analysis and transformations, most of these pipelines are slow and error
+prone. Having a easy to work pipeline allows developers to spend more time on
+model training rather than on initial pipeline setup. 
 
-As we all know AI compilers are mostly made using MLIR, so MLIR was my first choice 
-when working on this project, It was hard and something that have only been done once
-as Lingo-DB. But the idea came to mind that what if I created a SQL Query Engine which
-executes data as if they were tensors, of course, there I knew I would face challenges with expensive
-computations of data types such as strings, dates, floating point, etc.
+Some of the database queries are required to be run on GPU, rather than on CPU,
+for large amount of datasets, for these systems we lack the heterogeneity of
+devices we can run code on limiting usage of such applications on wide variety
+of devices. Our Library aims to provide both of these worlds where usability,
+performance, and device portability is not compromised.
 
-The project finally came into existence when I made my first end-to-end compiler in MLIR.
-I knew I would have to deal with tensors, so I decided to use Apache Arrow since it deals with
-databases as columns instead of classic row based representation. 
+## Dialect Design Motivation
 
-Along the way I made so many mistakes and fixed them while learning better ways of doing things.
+Kero-Sine uses custom dialect named db dialect to represent relational queries
+into simple operations that can executed in order to mimic results from a SQL
+compiler like PostgreSQL. We aim to lower db dialect to Tensor and Linalg mainly
+allowing for further optimizations such as tiling, directly from MLIR existing
+MLIR passes, without the need to maintain custom MLIR passes.
 
-## Design Decisions
-### DB Type
-DB Types involve two types: DBTable, DBColumn
-- **Table** types are used to transfer information about the movement of data.
-- **Column** is for representing computation for a given operation inside filter.
+## Existing Work
+There are several applications designed to run SQL queries, some adopt row by
+row execution, some adopt column by column, Some use MLIR under the hood, some
+use CUDA as it's backend.
 
-Table type has an array of column attributes which helps in filtering, applying
-filter on particular operation as well as knowing the data type of each column.
-Since all the columns were needed to be converted to tensors in lowering pass, I decided 
-to make it so that a single type shows the data movement and later that type can be expanded to
-tensors without needing complex analysis.
+In this wide variety of applications few are worth nothing which intersects with
+the scope of Kero-Sine.
 
-#### Why is there no need for number of rows in Column type?
-This is because the column doesn't need to know where it needs to apply the operation, this is 
-handled in lowering by linalg, the pattern closely matches to arith way of comparing values,
-making it easier to lower.
+### Lingo-DB
+Lingo-DB is a data processing compiler developed by Technical University of 
+Munich. It uses MLIR infrastructure to develop highly optimized pipelines, which
+can perfomant code easily on different device architectures, Lingo-DB allows for
+Cross-domin optimizations, JIT compilation, etc.
 
-### Operations
+Lingo-DB works on the model of column by column execution, with the aim to
+directly adapt Apache Arrow memory format. It provides multi layer IR design for
+investigating heterogenous hardware for data processing.
 
-- **Scan Operation:** is needed in the case when we create a new complex data type infuture, where we
-    will pass whole database in the function argument allowing us to compute while retaining the complex
-    relations between different tables.
+### Heavy DB
+Heavy DB is a SQL query engine build using rapids API from CUDA and designed to
+run SQL query fast on GPU. Running queries as GPU kernels allow easy transfer
+for different applications such as ML model training, query large databases with
+high number of complex queries.
 
-- **Filter Operation:** is used to apply the where clause in the query and output a unknown size filtered table
-- **Output Operation:** is pretty straight forward to apply, it just takes in a table and outputs only the column
-    which are selected, making lowering much easier by only outputing the filtered tensors, that were selected.
+Heavy DB aims to provide both performance and usability but fails at the part of
+device heterogeneity, making it unsuitable to run same code on different devices.
+
+### Tensor Query Processor (TQP)
+TQP is a research tool that runs the SQL query using already available PyTorch
+infrastructure. It uses tensor computation model, treating each column as tensor
+and applying already available PyTorch Operations to mimic SQL query execution.
+Written purely using PyTorch allows for hardware portability and performant code
+when utilized with PyTorch Compiler Stack, allowing for optimized GPU kernels,
+Operator fusion, etc. While this project passes all the tests that kero aims to
+achieve, it is proprietary research project which is not available for public use.
+
+## Dialect Design
+
+Kero-Sine uses MLIR infrastructure, to compile query from it's custom dialect to
+tensor and linalg dialect. Most of the heavy lifting is done by MLIR, allowing
+for better code maintenance, and far more available optimizations out of the box.
+
+### DB dialect
+DB dialect tries to adapt the approaches of Heavy DB and TQP, and treat Table
+columns as 1-D tensors, and generate separate code for filter execution and for
+applying mask generated (mask is a tensor that tells which row in tensor are not
+available and which one are).
+
+#### DB Types
+- DBTable: shows the flow of data for each operation.
+- DBColumn: shows the computation for each operation.
+
+#### Operations
+- ScanOp: acts as a placeholder for the table that is inputed.
+- FilterOp: Applies where clause to on the table.
+- OutputOp: extracts the selected columns from the table and create a new table.
+
+#### Filter Op in detail
+DB Filter operation provides a region which is used to apply WHERE clause from
+sql query and generate a new table out of it. DB Filter Operation consists of
+operations such as `db.cmp` which is used to apply comparision between a column
+and a constant for query like `salary > 100`, these operations directly maps to
+arith operations making it easier to generate IR out of it.
+
+Lowering DB Filter to Linalg generic to create a mask:
+
+Linalg generic provides interface to apply element-wise ops for given tensors
+and generate new tensors out of it, making them ideal choice for generating mask
+which can be applied on different whole table.
+
+Lowering DB Filter to Linalg generic allows for lowering to different forms such
+as `--convert-linalg-to-parallel-loops`, `--convert-scf-to-openmp`, getting us
+free performance out of already optimized passes.
+
+## Compilation Pipeline
+
+- Parsing: Kero uses SQLGlot to parse SQL queries, and generates a new DB ast with type resolved nodes identical to db dialect operations and types.
+- Codegen: Uses MLIR Python bindings to add correct operation to module, from db dialect.
+- MLIR IR: Codegen produces a IR from the db dialect. It is a custom MLIR dialect which lies close to SQL semantics.
+- Lowering to tensor, Linalg and scf: kero contains a custom lowering pass to lower db dialect to tensor, linalg, and scf dialect.
+- Lowering to LLVM: Since all the operations are converted to upstream MLIR dialects, we can progressively lower it to LLVM dialect using passes such as one-shot-bufferize, convert-linalg-to-loops, etc. other standard passes.
 
 ## Current Limitations
-- No JOINs, aggregates (COUNT, SUM), GROUP BY, ORDER BY, LIMIT
-- Restricted support to Integer datatype
-- No query optimization passes
-- Sequential execution only
-- Single-table queries only
-- No Query Chaining
+
+- Limited Query Scope (db.join, db.sum, db.count, etc), (in future we can add support for nested queries but requires it requires analysis to merge, filter regions).
+- No GPU execution.
+- Inefficient apply mask application (can be applied using Prefix sum algorithm to generate new tensors).
+- No support for operation chaining.
+- Limited to int and float (can be done Limited to int and float adopted HeavyDB String serialization techiniques).
+- Column to literal comparison only (can support column with column comparision without much code change since it will just take in input a column row element instead of a constant).
+
+## Future Scope
+
+Kero-Sine currently has several limitations, which can be harmful for performance, memory usage, as well as API UX. In future, it is aimed to overcome those limitations by introducing various new features.
+
+- Adding new custom dialect, kero, for representing computations such as implementing String dictionaries to n-bit integers (depending on the uniqueness and num rows), adding custom C++ libs for date manipulation or string manipulation that can be called via shared_lib functions inside the JIT Engine.
+- Adding more operations like JOIN, Aggregation, or nested queries, etc.
+- Accept whole database as input instead of just single table and extract table from dataset using scan operation (it’s decided to get the dataset from external function call instead of passing it directly to the jit arguments).
+- Allow for Operation chaining if possible and apply canonicalization to group up different operations such as two filter operations mixed to one to produce single linalg generic op instead of two.
+- Apply prefix-sum algorithm for applying mask to the columns.
+- Add GPU lowering to dialects such as NVVM or ROCDL.
 
 ## Prerequisites
 
@@ -216,12 +281,3 @@ module {
   }
 }
 ```
-
-## What's Next
-- Float and String column type support.
-- Output selects `*` directly, making IR cleaner and having to reducing large output overhead.
-- Support Chaining Different operations together.
-- Query Optimizations, combine different  queries
-- Add float and string support to Execution Engine, and direct reading from pyarrow.
-- Support Nested Query as well as complex query operations such as JOIN, AGG, etc.
-- GPU execution path
